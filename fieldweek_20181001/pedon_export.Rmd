@@ -1,5 +1,9 @@
 ---
-output: html_document
+title: Workflow for Exporting Pedons from NASIS for the Fieldwook
+author: "Stephen Roecker"
+date: "10/2/2018"
+output:
+  html_document:
 editor_options: 
   chunk_output_type: console
 ---
