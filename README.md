@@ -4,7 +4,7 @@
 
 Digital Soil Mapping - The generation of geographically referenced soil databases based on quantitative relationships between spatially explicit environmental data and measurements made in the field and laboratory (McBratney et al., 2003); the spatial prediction of soil classes or properties from point data and environmental raster data using a statistical algorithm. For general information on Digital Soil Mapping, please click [here](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=stelprdb1254424).
 
- ## Charges. 	
+ ## Charges
 
 - Coordinate DSM activities across the Soil and Plant Science Division
 - Identify training needs
@@ -18,7 +18,7 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 - Identify gaps
     - Produce raster-based soil data and information
 
-## Digital Soil Mapping Sub-Teams button. 	
+## Sub-Teams
 
 - [Properties Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1442019)
 - [Initial Mapping Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1439217)
