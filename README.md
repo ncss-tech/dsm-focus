@@ -52,3 +52,5 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 Suzann Kienast-Brown, Soil Scientist (GIS Specialist), Bozeman, Montana
 Tom D’Avello, Soil Scientist, GRU, Morgantown, West Virginia
 Dr. James Thompson, Professor, WVU, Morgantown, West Virginia
+
+![Poster](https://github.com/ncss-tech/dsm-focus/blob/master/meetings/supporting_info/nrcseprd1404816.jpg)
