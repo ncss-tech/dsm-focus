@@ -1,10 +1,13 @@
 ### Landsat 8 covariate development
 # For the 2020 Florida Field Week
 
-# Dave White 11/08/2019
+# 11/08/2019
+# Dave White USDA-NRCS david.white@usda.gov
+# Nicholas Klein-Baer USDA-USFS nicholas.klein-baer@usda.gov
 # 
 
 # The landsat data was dounloaded using the USFS implementations in google earth engine. The following is a link to those modules : https://earthengine.googlesource.com/users/USFS_GTAC/modules/+/master. To represent dry periods of time Jan 1 to Feb 28th was used from 2015 to 2019. To represent wet periods of time July 1st to Sept 30th was used from 2015 to 2019. Time buffer was set to 2, weights was set to 1,2,3,2,1, median and SR was selected for each season. This algorithim calculates the median values for each date range. The final band combonations reflect those of Landsat 7.
+
 
 
 
@@ -28,7 +31,7 @@ rm(required.packages, new.packages)
 
 # set directory that contains the ls rasters 
 # *** pay attention to the / below
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral")
+setwd("E:/Big_Cypress/data/spectral/")
 
 # read in raster layers to create raster stack
 ls.wet <- stack("LSwet.tif")
@@ -38,7 +41,7 @@ ls.dry <- stack("LSdry.tif")
 
 # read in shapefile to clip rasters
 # NOTE - this is our huc 10 buffer bndry 
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/shape file/projected")
+setwd("E:/Big_Cypress/data/huc12")
 
 poly <- readOGR(dsn = ".", layer = "huc12") # reads in shapefile
 
@@ -54,11 +57,11 @@ ls.wet <- mask(stack.crop.wet, poly.r)
 ls.dry <- mask(stack.crop.dry, poly.r)
 
 # save raster data
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/clip")
-saveRDS(ls.wet, "ls_wet.rds")
-writeRaster(ls.wet, filename = "ls_wet.tif", format = "GTiff", overwrite = TRUE)
-saveRDS(ls.dry, "ls_dry.rds")
-writeRaster(ls.dry, filename = "ls_dry.tif", format = "GTiff", overwrite = TRUE)
+# setwd("E:/Big_Cypress/data/spectral/clip")
+# saveRDS(ls.wet, "ls_wet.rds")
+# writeRaster(ls.wet, filename = "ls_wet.tif", format = "GTiff", overwrite = TRUE)
+# saveRDS(ls.dry, "ls_dry.rds")
+# writeRaster(ls.dry, filename = "ls_dry.tif", format = "GTiff", overwrite = TRUE)
 
 # visually inspect the raster
 plot(ls.dry$LSdry.1)
@@ -68,7 +71,7 @@ plot(ls.dry$LSdry.1)
 # added a constant to each band. there were some issues in calculating the indices, where it was 
 # returning no data cells. 
 
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/clip/wet")
+setwd("E:/Big_Cypress/data/spectral/clip/wet")
 
 lswetb1 <- ls.wet$LSwet.1 + 1
 writeRaster(lswetb1, filename = "lswet1.tif", format = "GTiff", overwrite = TRUE)
@@ -80,14 +83,14 @@ lswetb4 <- ls.wet$LSwet.4 + 1
 writeRaster(lswetb4, filename = "lswet4.tif", format = "GTiff", overwrite = TRUE)
 lswetb5 <- ls.wet$LSwet.5 + 1
 writeRaster(lswetb5, filename = "lswet5.tif", format = "GTiff", overwrite = TRUE)
-lswetb6 <- ls.wet$LSwet.6 + 1
+lswetb6 <- ls.wet$LSwet.7 + 1
 writeRaster(lswetb6, filename = "lswet6.tif", format = "GTiff", overwrite = TRUE)
-lswetb7 <- ls.wet$LSwet.7 + 1
+lswetb7 <- ls.wet$LSwet.6 + 1
 writeRaster(lswetb7, filename = "lswet7.tif", format = "GTiff", overwrite = TRUE)
 
 
 
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/clip/dry")
+setwd("E:/Big_Cypress/data/spectral/clip/dry")
 lsdryb1 <- ls.dry$LSdry.1 + 1
 writeRaster(lsdryb1, filename = "lsdry1.tif", format = "GTiff", overwrite = TRUE)
 lsdryb2 <- ls.dry$LSdry.2 + 1
@@ -98,9 +101,9 @@ lsdryb4 <- ls.dry$LSdry.4 + 1
 writeRaster(lsdryb4, filename = "lsdry4.tif", format = "GTiff", overwrite = TRUE)
 lsdryb5 <- ls.dry$LSdry.5 + 1
 writeRaster(lsdryb5, filename = "lsdry5.tif", format = "GTiff", overwrite = TRUE)
-lsdryb6 <- ls.dry$LSdry.6 + 1
+lsdryb6 <- ls.dry$LSdry.7 + 1
 writeRaster(lsdryb6, filename = "lsdry6.tif", format = "GTiff", overwrite = TRUE)
-lsdryb7 <- ls.dry$LSdry.7 + 1
+lsdryb7 <- ls.dry$LSdry.6 + 1
 writeRaster(lsdryb7, filename = "lsdry7.tif", format = "GTiff", overwrite = TRUE)
 
 
@@ -113,7 +116,7 @@ writeRaster(lsdryb7, filename = "lsdry7.tif", format = "GTiff", overwrite = TRUE
 ## Development of Landsat dry covariates
 
 ## set working directory for landsat 8 dry data
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/clip/dry")
+setwd("E:/Big_Cypress/data/spectral/clip/dry")
 
 ## load ls drt data as a raster stack
 r.list=list.files(getwd(), pattern="tif$", full.names = FALSE)
@@ -136,7 +139,7 @@ return(ind)
 ## set up cluster
 beginCluster()
 #### set workspace for leaf dry covariates
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/cov")
+setwd("E:/Big_Cypress/data/spectral/cov")
 
 
 ## ratio calcs for dry
@@ -176,7 +179,7 @@ clusterR(ndvi.dry, overlay, args=list(fun=nd_fn),progress='text',filename="ndvid
 
 
 # msavi2 - modified soil adjusted vegitation index - for areas of sparce vegetation
-msavi_fn <- function(bd1,bd2) {ind <- ((2*bd1+1)-(sqrt((2*bd1+1)^2)-8*(bd1-bd2)))/2
+msavi_fn <- function(bd1,bd2) {ind <- ((2*bd1+1)-(sqrt((2*bd1+1)^2-8*(bd1-bd2))))/2 
 return(ind)
 }
 msavi.dry <- stack(b4dry, b3dry)
@@ -250,7 +253,7 @@ gc()
 ## Development of Landsat wet covariates
 
 ## set working directory for landsat wet data
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/clip/wet")
+setwd("E:/Big_Cypress/data/spectral/clip/wet")
 
 ## load ls drt data as a raster stack
 r.list=list.files(getwd(), pattern="tif$", full.names = FALSE)
@@ -273,7 +276,7 @@ return(ind)
 ## set up cluster
 beginCluster()
 #### set workspace for leaf wet covariates
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/cov")
+setwd("E:/Big_Cypress/data/spectral/cov")
 
 
 ## ratio calcs for wet
@@ -313,7 +316,7 @@ clusterR(ndvi.wet, overlay, args=list(fun=nd_fn),progress='text',filename="ndviw
 
 
 # msavi2 - modified soil adjusted vegitation index - for areas of sparce vegetation
-msavi_fn <- function(bd1,bd2) {ind <- ((2*bd1+1)-(sqrt((2*bd1+1)^2)-8*(bd1-bd2)))/2
+msavi_fn <- function(bd1,bd2) {ind <- ((2*bd1+1)-(sqrt((2*bd1+1)^2-8*(bd1-bd2))))/2 
 return(ind)
 }
 msavi.wet <- stack(b4wet, b3wet)
@@ -386,7 +389,7 @@ gc()
 
 ## load rasters
 #### set workspace for leaf on covariates
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/cov/")
+setwd("E:/Big_Cypress/data/spectral/cov/")
 
 ndviwet <- raster("ndviwet.tif")
 msaviwet <- raster("msaviwet.tif")
@@ -407,7 +410,7 @@ return(ind)
 }
 
 ## Veg index differences
-setwd("D:/DSM_Focus_Team/Field_weeks/2020_FL_FieldWeek/data/spectral/cov/")
+setwd("E:/Big_Cypress/data/spectral/cov/")
 
 
 ## set up cluster
@@ -437,4 +440,3 @@ clusterR(tcgnd, overlay, args=list(fun=vc_fn),progress='text',
 endCluster()
 
 ######################################################################
-
