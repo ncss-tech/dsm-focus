@@ -83,9 +83,9 @@ lswetb4 <- ls.wet$LSwet.4 + 1
 writeRaster(lswetb4, filename = "lswet4.tif", format = "GTiff", overwrite = TRUE)
 lswetb5 <- ls.wet$LSwet.5 + 1
 writeRaster(lswetb5, filename = "lswet5.tif", format = "GTiff", overwrite = TRUE)
-lswetb6 <- ls.wet$LSwet.7 + 1
+lswetb6 <- ls.wet$LSwet.6 + 1
 writeRaster(lswetb6, filename = "lswet6.tif", format = "GTiff", overwrite = TRUE)
-lswetb7 <- ls.wet$LSwet.6 + 1
+lswetb7 <- ls.wet$LSwet.7 + 1
 writeRaster(lswetb7, filename = "lswet7.tif", format = "GTiff", overwrite = TRUE)
 
 
@@ -101,9 +101,9 @@ lsdryb4 <- ls.dry$LSdry.4 + 1
 writeRaster(lsdryb4, filename = "lsdry4.tif", format = "GTiff", overwrite = TRUE)
 lsdryb5 <- ls.dry$LSdry.5 + 1
 writeRaster(lsdryb5, filename = "lsdry5.tif", format = "GTiff", overwrite = TRUE)
-lsdryb6 <- ls.dry$LSdry.7 + 1
+lsdryb6 <- ls.dry$LSdry.6 + 1
 writeRaster(lsdryb6, filename = "lsdry6.tif", format = "GTiff", overwrite = TRUE)
-lsdryb7 <- ls.dry$LSdry.6 + 1
+lsdryb7 <- ls.dry$LSdry.7 + 1
 writeRaster(lsdryb7, filename = "lsdry7.tif", format = "GTiff", overwrite = TRUE)
 
 
