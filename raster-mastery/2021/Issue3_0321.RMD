@@ -1,0 +1,165 @@
+---
+output:
+  html_document:
+    highlight: haddock
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<b><h1 style="color:#002C76;">Sampling Techniques: When a Grid Can Be So Much More</h1></b>
+Sampling is a key component to digital soil mapping projects. It's also a topic that is often discussed amongst practitioners&#x2026;for hours upon hours actually. Numerous tools are at our disposal when designing a sampling scheme, but we often don't consider grid sampling as a first-line strategy for sampling design. In this issue of Raster Mastery, we ask&#x2026;should I grid sample? If so, is there an optimal way to generate grid samples? What if I want to incorporate covariate data? We have so many options to consider! Read on as we explore the options in R (insert super enthusiastic R emoji here).
+
+First, let's set up our working environment and bring in some data.
+```{r setworkingENV, echo=TRUE, warning=FALSE, results='hide', error=FALSE, message=FALSE}
+# load libraries
+library(raster);library(rgdal);library(clhs);library(spcosa); library(LICORS); library(parallel)
+
+# load project area shapefile
+poly <- readOGR("C:/rwork/coweeta/watershed.shp")
+
+# load dem
+dem <- raster("C:/rwork/coweeta/chldem10m.tif")
+# create slope and aspect rasters
+slp <- terrain(dem, opt="slope")
+aspt <- terrain(dem, opt="aspect")
+# create hillshade for visualization
+hill <- hillShade(slp, aspt, angle = 40, direction = 270)
+
+```
+<h2 style="color:#002C76;">Regular Grid Sampling</h2>
+<p>Traditional grid sampling can be useful for a detailed investigation. However, sometimes getting an exact number of points you want to fall within a regular grid can be very difficult.
+The following creates a regular grid of 115 points over the DEM for our project location.</p>
+```{r reggrid, echo=TRUE, warning=FALSE, results='hide', error=FALSE, message=FALSE}
+# create a regular saple of points
+grd_pts <- sampleRegular(dem, size = 115, sp=T)
+```
+```{r reggridplot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.align="center"}
+plot(hill,
+     col=grey.colors(100, start=0, end=1),
+    legend=F, main = "Regular Grid Sampling")
+# overlay watershed on top of hillshade
+plot(poly,
+     add=T,
+     alpha=.4)
+points(grd_pts, pch=19, col="blue", cex=.8, legend=T)
+```
+Notice that, although we wanted to sample 115 points, many are outside of our project area boundary. Why though? The algorithm uses the bounding box, rather than the project area boundary, as the spatial constraint. That won't do. We need a smarter grid! We can take a different approach by utilizing the spatial coverage sampling scheme in the <b><i>spcosa</i></b> R package.
+<b><h2 style="color:#002C76;">Spatial Coverage Sampling</h2></b>
+This process uses k-means clustering to generate points based on the geometry of the raster data.  Smarter grid for sure.
+```{r sgpts, warning=FALSE, error=FALSE, message=FALSE, cache=TRUE}
+# convert raster to data.frame
+grd <- as.data.frame(dem, xy=T)
+grd <- na.omit(grd) #remove NAs
+gridded(grd) <- ~ x * y # convert to grid format
+# function
+sc_grd <- stratify(grd, nStrata = 115, nTry=10)
+
+# pull out sample points and save to shp
+samp_pattern <- spsample(sc_grd)
+samp_pts <- as(samp_pattern, "data.frame")
+coords<- samp_pts[c("x","y")]
+prj <- dem@crs
+samp_pts <- SpatialPointsDataFrame(coords = coords, data = samp_pts, proj4string = prj)
+```
+```{r sgptsplot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.align="center"}
+plot(hill,
+     col=grey.colors(100, start=0, end=1),
+    legend=F, main = "Spatial Coverage Sampling")
+# overlay watershed on top of hillshade
+plot(poly,
+     add=T,
+     alpha=.4)
+points(samp_pts, pch=19, col="red", cex=.8, legend=T)
+```
+The resulting grid is a set of points that are equally distributed throughout the project area, and each in the center of a k-means cluster. Now that's better!
+What if we kicked it up a notch? Let's sample based on the environmental covariates developed to represent important soil forming factors. One popular technique is conditioned Latin hypercube sampling(cLHS), another technique is feature space coverage sampling (FSCS).
+<b><h2 style="color:#002C76;">Feature Space Coverage Sampling</h2></b>
+The spatial coverage sampling technique uses k-means to find the shortest distance between sample locations and the XY coordinates of a raster. FSCS builds off this technique by using k-means to find the optimal coverage spanned by the environmental covariates.
+First, let's set up the covariate data.
+```{r rstack, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, cache=TRUE}
+# set directory to covariates
+setwd("C:/rwork/coweeta/cov/cov")
+
+# load in raster data
+# read in raster layers names and create list
+rlist=list.files(getwd(), pattern=".tif$", full.names = FALSE)
+
+# create raster stack
+rstk <- stack(rlist)
+
+# create a grid of points (n=gsize) to represent the raster stack
+# - this can be done many ways sampleRegular is one method
+gsize <- 10000 
+samp_reg <- sampleRegular(rstk, size = gsize, sp=T)
+
+samp_regdf <- na.omit(as.data.frame(samp_reg))
+```
+Stack 'em up! To run FSCS, we need to convert the raster stack to a data frame in R. For spatially large rasters and for raster stacks with numerous covariates, the conversion is a time-consuming process. That might be welcome if you enjoy the art of slow coffee, but it's not great for productivity. We recommend you slam that coffee and create a regular grid of points to represent the covariate data. You can set the size of the grid in the <b><i>gsize</i></b> parameter.
+Next let's run the FSCS algorithm&#x2026; in parallel to be even more productive.
+```{r fscs, warning=FALSE, error=FALSE, message=FALSE, cache=TRUE}
+# parallel implementation of FSCS
+nw <- detectCores(logical = F)-1
+cl <- makeCluster(nw)
+clusterSetRNGStream(cl, iseed=1234)
+set.seed(88)
+# Parallelize over the "nstart" argument
+nstart <- 100
+# Create vector of length "nw" where sum(nstartv) == nstart
+nstartv <- rep(ceiling(nstart / nw), nw)
+results <- clusterApply(cl, nstartv,
+                        function(n,x) LICORS::kmeanspp(x, 115, nstart=n, iter.max=1000),
+                        samp_regdf[,1:4])
+# Pick the best result
+i <- sapply(results, function(result) result$tot.withinss)
+result <- results[[which.min(i)]]
+stopCluster(cl)
+```
+The key parameters (<u>underlined</u> below) for the <b><i>kmeanspp</i></b> function in the parallel implementation (code block above) of the FSCS algorithm are:<br>
+<b><i>nstart</i></b> <u>100</u> # number of random starts<br>
+<b><i>sampNo</i></b> <u>115</u> # number of clusters whose centroids represent sampling locations<br>
+<b><i>iter.max</i></b> <u>1000</u> # number of iterations<br>
+<b><i>samp_regdf</i></b><u>[,1:4]</u> columns in our dataframe representing the covariates<br>
+
+Finally, let's pull out the FSCS points.
+```{r fscspts, warning=FALSE, error=FALSE, message=FALSE}
+# pull out the points
+fscs <- as.data.frame(result$inicial.centers)
+cov <- names(fscs)
+fscs.pts <- merge(samp_regdf, fscs, by = cov)
+
+# projection information
+prj <- rstk@crs
+coords <- fscs.pts[c("x","y")]
+# convert to sp
+fscs.pts <- SpatialPointsDataFrame(coords = coords, data = fscs.pts, proj4string = prj)
+
+# save pts to shpfile
+writeOGR(fscs.pts, dsn = ".", layer="fscs135.pts", driver = "ESRI Shapefile", overwrite_layer = T)
+```
+```{r fscsplot, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE, fig.align="center"}
+plot(hill,
+     col=grey.colors(100, start=0, end=1),
+    legend=F, main = "FSCS Sampling")
+# overlay watershed on top of hillshade
+plot(poly,
+     add=T,
+     alpha=.4)
+points(fscs.pts, pch=19, col="green", cex=.8, legend=T)
+```
+We now have points that are within our project area and that were created considering the covariates chosen to represent important soil forming factors. If the combination of those covariates adequately captures the variability across the landscape, we assume the resulting points will as well. What more could you want?
+There are many options for sample design and not one silver-bullet-solve-all-the-things solution. Consider your project carefully, and the strengths and weaknesses of each sampling approach to help you determine how to move forward.
+<br>
+<br>Contact Dave White (david.white@usda.gov) for further questions regarding the content in this issue.
+<b><h2 style="color:#002C76;">Pixel Humor</h2></b>
+If you hung in this long, you deserve a pixel joke!
+Q: Why are latitude and longitude so smart?
+A: Because they have degrees.
+<b><h2 style="color:#002C76;">Get Involved</h2></b>
+Check out the DSM Focus Team <a href="https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1319418">website</a> to learn more and to find out how you can participate. Contact Suzann Kienast-Brown (suzann.kienast@usda.gov) for more information.
+<b><h2 style="color:#002C76;">Are you in or out? Have an idea?</h2></b>
+Raster Mastery will be gracing your inbox with tidbits, hot tips, and how-tos on all things digital soil mapping on a regular basis, but not too often. If you have ideas for topics or want to opt-in or out, give a shout to raster master Jessica Philippe (jessica.philippe@usda.gov). If you have pixel-loving friends, please share!
+<b><h3 style="color:#002C76;">References</h2></b>
+Brus, D.J., J.J. de Gruijter, and J.W. van Groenigen, 2007. Designing spatial coverage samples using the k-means clustering algorithm. Developments in Soil Science 31: 183-192. https://doi.org/10.1016/S0166-2481(06)31014-8.
+
+Ma, T., D.J. Brus, A.-X. Zhu, L. Zhang, and T. Scholten, 2020. Comparison of conditioned Latin hypercube and feature space coverage sampling for predicting soil classes using simulation from soil maps. Geoderma, 370. https://doi.org/10.1016/j.geoderma.2020.114366 
