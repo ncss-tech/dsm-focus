@@ -14,7 +14,7 @@ script "Auto-detect" the NoData value)
 
 # USER INPUT: set to local folder in which all GEE outputs have been downloaded
 #Note: the r preceding the folder path will convert the file path into a raw string which is interpretable by python regardless of direction of slashes in filepath
-inFolder=r'D:/Soils2026/download/test'
+inFolder=r'D:/Soils2026/download/ca793TEST'
 #USER INPUT: set to raster to which you want to snap all GEE outputs (e.g. SSURGO or gNATSGO raster)
 snapRaster = r'D:/Soils2026/gSSURGO-mukey.tif' #or None
 #USER INPUT: set to horizontal resolution (meters) of spectral data and topographic data
@@ -176,7 +176,7 @@ for tag in cndviList:
     if len(cndviList)>0:
         tif_list = [i for i in os.listdir(inFolder) if tag in i and i.endswith('.tif')]
         setNull(tif_list, spectralNoData)
-        print('calculating stats for', tag)
+        #print('calculating stats for', tag)
 print('done calculating cNDVI stats')
 
 # set null and calc stats on topo layers
@@ -184,7 +184,7 @@ for tag in tagList_topo:
     if len(tagList_topo)>0:
         tif_list = [i for i in os.listdir(inFolder) if i.endswith('.tif') and prefix+'_'+tag in i and '-00' not in i] #the -00 is to skip calculations on the tiled images
         setNull(tif_list, topoNoData)
-        print('calculating stats for', tag)
+        #print('calculating stats for', tag)
 print('done calculating topo stats')
 
 
@@ -193,13 +193,13 @@ for tag in tagList_spectral:
     tif_list = [i for i in os.listdir(inFolder) if i.endswith('.tif') and prefix+'_'+tag in i and 'hillshade' not in i and '-00' not in i]
     # in tif_list I had to exclude hillshade, it sometimes pulls in hillshade with hi
     setNull(tif_list, spectralNoData)
-    print('calculating stats for', tag)
+    #print('calculating stats for', tag)
 print('done calculating spectral stats')
 
 # set null and calc stats on msavi2
 msavNoData = spectralNoData
 msav = [i for i in fileList if 'msavi2' in i and '-00' not in i and i.endswith('.tif')]
-if msav len(msav)>0:
+if len(msav)>0:
     rast = arcpy.Raster(msav)
     arcpy.management.SetRasterProperties(in_raster=rast, nodata=[[1,msavNoData]])
     arcpy.CalculateStatistics_management(in_raster_dataset=rast, x_skip_factor=100,
