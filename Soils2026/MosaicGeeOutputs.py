@@ -74,7 +74,7 @@ tagList_topo = ['elev', 'slope', 'aspect', 'hillshade',
 tagList_spectral = ['red', 'green', 'blue', 're1','re2','re3', 'nir1', 'nir2', 'swir1',
                'swir2', 'ndvi', 'nbr', 'bsi', 'ndmi','ferrIdx','ndsi', 'ndci','natricidx','hi',
                'evi','savi','TCbright', 'TCgreen', 'TCwet', 'TC4', 'TC5', 'TC6', 
-               'gpyidx','feoxidx','clayidx','wateridx','rockidx']#,'msavi2'] removed msavi from specral list as it is a 32 float rest are 16 signed
+               'gypidx','feoxidx','clayidx','wateridx','rockidx']#,'msavi2'] removed msavi from specral list as it is a 32 float rest are 16 signed
 
 yearsList = list(set([i.split('_')[-1] for i in os.listdir(inFolder) if i.endswith('.tif') and 'mosaic' not in i and 'cNDVI' in i]))
 
