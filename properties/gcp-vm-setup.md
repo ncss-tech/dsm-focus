@@ -160,7 +160,7 @@ gce_push_registry(vm, "rstudio-server", container_name = "rstudio-server")
 ## launch another rstudio instance with your settings
 vm2 <- gce_vm(template = "rstudio",
               name = "rstudio-server-2",
-              username = "smroecker", password = "funnybunny42",
+              username = "smroecker", password = pwd,
               predefined_type = "n2d-highmem-96",
               dynamic_image = gce_tag_container("rstudio-server"))
 
