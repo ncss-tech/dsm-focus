@@ -21,8 +21,6 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 ## Sub-Teams
 
 - [Properties Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1442019)
-- [Initial Mapping Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1439217)
-- [Update Mapping Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1407211)
 - [Sub-Team meeting minutes](https://github.com/ncss-tech/dsm-focus/tree/master/meetings)    
 
 ## Webinars
@@ -50,7 +48,7 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 ## Contact
 
 Suzann Kienast-Brown, Soil Scientist (GIS Specialist), Bozeman, Montana
-Tom D’Avello, Soil Scientist, GRU, Morgantown, West Virginia
+Jessica Philippe, Soil Scientist (DSM Specialist), St. Johnsbury, Vermont
 Dr. James Thompson, Professor, WVU, Morgantown, West Virginia
 
 ![Poster](https://github.com/ncss-tech/dsm-focus/blob/master/meetings/supporting_info/nrcseprd1404816.jpg)
