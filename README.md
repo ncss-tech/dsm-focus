@@ -2,7 +2,7 @@
 
 ## Overview
 
-Digital Soil Mapping - The generation of geographically referenced soil databases based on quantitative relationships between spatially explicit environmental data and measurements made in the field and laboratory (McBratney et al., 2003); the spatial prediction of soil classes or properties from point data and environmental raster data using a statistical algorithm. For general information on Digital Soil Mapping, please click [here](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/survey/geo/?cid=stelprdb1254424).
+Digital Soil Mapping - The generation of geographically referenced soil databases based on quantitative relationships between spatially explicit environmental data and measurements made in the field and laboratory (McBratney et al., 2003); the spatial prediction of soil classes or properties from point data and environmental raster data using a statistical algorithm. For general information on Digital Soil Mapping, please click [here]([https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/digital-soil-mapping-team]).
 
  ## Charges
 
@@ -20,7 +20,8 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 
 ## Sub-Teams
 
-- [Properties Sub-Team](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1442019)
+- [Properties Sub-Team](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/properties-sub-team)
+- [Practitioner Sub-Team](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/practitioner-sub-team)
 - [Sub-Team meeting minutes](https://github.com/ncss-tech/dsm-focus/tree/master/meetings)    
 
 ## Webinars
@@ -37,7 +38,7 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 
 - Check us out on Github at https://github.com/ncss-tech/dsm-focus offsite link image    
 - Job Aids – GIS and Digital Soil Mapping for Soil Survey
-- [Soil Survey Manual – Chapter 5. Digital Soil Mapping](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/ref/?cid=nrcs142p2_054255)
+- [Soil Survey Manual – Chapter 5. Digital Soil Mapping](https://www.nrcs.usda.gov/sites/default/files/2022-09/SSM-ch5.pdf)
 
 ## Accomplishments	
 
@@ -50,6 +51,7 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 Suzann Kienast-Brown, Soil Scientist (GIS Specialist), Bozeman, Montana
 
 Jessica Philippe, Soil Scientist (DSM Specialist), St. Johnsbury, Vermont
+
 Dr. James Thompson, Professor, WVU, Morgantown, West Virginia
 
 ![Poster](https://github.com/ncss-tech/dsm-focus/blob/master/meetings/supporting_info/nrcseprd1404816.jpg)
