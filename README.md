@@ -48,6 +48,7 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 ## Contact
 
 Suzann Kienast-Brown, Soil Scientist (GIS Specialist), Bozeman, Montana
+
 Jessica Philippe, Soil Scientist (DSM Specialist), St. Johnsbury, Vermont
 Dr. James Thompson, Professor, WVU, Morgantown, West Virginia
 
