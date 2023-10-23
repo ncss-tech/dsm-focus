@@ -22,29 +22,20 @@ Digital Soil Mapping - The generation of geographically referenced soil database
 
 - [Properties Sub-Team](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/properties-sub-team)
 - [Practitioner Sub-Team](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/practitioner-sub-team)
+- Ecological Site Sub-Team
 - [Sub-Team meeting minutes](https://github.com/ncss-tech/dsm-focus/tree/master/meetings)    
 
 ## Webinars
 
 - [Applied Digital Soil Mapping: Using pedology to understand, map, model, and manage landscapes](https://www.youtube.com/watch?v=eLFWnUHDl4M) - Dr. Nauman explores how predictive statistical techniques in soil science can inform land management planning and decision making. Example applications include planning forest restoration, refining ecological sites, evaluating restoration of oil and gas drilling sites, determining dust sources, identifying salinity mitigation sites, mapping ecological states, and assessing landslide risk.
-- [Digital Soil Mapping Focus Team](https://www.youtube.com/watch?v=WG5UR8uTAFo) - An introduction to the focus team, current activities, and vision for digital soil mapping within the SSD.
-- [Digital Soil Mapping Primer](https://www.youtube.com/watch?v=-H7_OIIF0Pg) - An introduction to the basic process and methods under the umbrella of digital soil mapping.
 - [SDJR is Over, Now What?](https://www.youtube.com/watch?v=iw4rMB-4f78) - An update project using digital soil mapping methods in North Dakota.
 - [Digital Soil Mapping in Practice: Essex County, VT](https://www.youtube.com/watch?v=fAwe4ccUCdY) - An initial mapping project using digital soil mapping methods in Vermont.
 - [Soil Survey of the Boundary Waters Canoe Area Wilderness](https://www.youtube.com/watch?v=sfoe-lm8-8o) - An initial mapping project using digital soil mapping methods in Minnesota.
-- [Exploring the Application of Machine Learning to Soil Datasets](https://www.youtube.com/watch?v=SxJzDyMHy10) - Dr. Ramcharan provides an introduction to the methods and datasets used to produce the SoilGrids100 dataset.
 
 ## Resources
 
-- Check us out on Github at https://github.com/ncss-tech/dsm-focus offsite link image    
-- Job Aids – GIS and Digital Soil Mapping for Soil Survey
+- [Job Aids – GIS and Digital Soil Mapping for Soil Survey](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/gis-and-digital-mapping-for-soil-survey)
 - [Soil Survey Manual – Chapter 5. Digital Soil Mapping](https://www.nrcs.usda.gov/sites/default/files/2022-09/SSM-ch5.pdf)
-
-## Accomplishments	
-
-- [DSM Focus Team presentation - October 2018 (PDF; 3.96 MB)](https://www.nrcs.usda.gov/wps/PA_NRCSConsumption/download?cid=nrcseprd1439618&ext=pdf)
-- [Fiscal Year 2018](https://www.nrcs.usda.gov/wps/portal/nrcs/detail/soils/focusteams/?cid=nrcseprd1439624)
-    
 
 ## Contact
 
