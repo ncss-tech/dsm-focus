@@ -2,7 +2,7 @@
 
 ## Overview
 
-Digital Soil Mapping - The generation of geographically referenced soil databases based on quantitative relationships between spatially explicit environmental data and measurements made in the field and laboratory (McBratney et al., 2003); the spatial prediction of soil classes or properties from point data and environmental raster data using a statistical algorithm. For general information on Digital Soil Mapping, please click [here]([https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/digital-soil-mapping-team]).
+Digital Soil Mapping - The generation of geographically referenced soil databases based on quantitative relationships between spatially explicit environmental data and measurements made in the field and laboratory (McBratney et al., 2003); the spatial prediction of soil classes or properties from point data and environmental raster data using a statistical algorithm. For general information on Digital Soil Mapping, please click [here](https://www.nrcs.usda.gov/conservation-basics/natural-resource-concerns/soil/digital-soil-mapping-team).
 
  ## Charges
 
