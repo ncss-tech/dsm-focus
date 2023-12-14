@@ -1,0 +1,935 @@
+// get_SpectralCovariates 
+
+// Generate spectral derivatives from Landsat and Sentinel2 data. This script requires an imported asset called 'image'.
+// This asset shold consist of a spectral composite of Landsat or Sentinel2 data. The Landsat composite should contain the
+// following bands:['red', 'green', 'blue', 'nir', 'swir1', 'swir2']. This composit can be developed using the 
+// getLandsat script: xxx URL xxx. The Sentinel2 composite should contain the following 
+// bands:['red', 'green', 'blue', 're1', 're2', 're3', 'nir', 'nir2', 'swir1', 'swir2']. This composite can be developed
+// using the getSentinel2 script:  xxx URL xxx.
+
+// This script generates spectral deravitives including; indicies, ratios, normalized differences, 
+// tasseled cap, and principal component analysis. Many of the indicies can be found at: https://www.indexdatabase.de/.
+
+// Some functions in this script are based on those found within the USFS-GTAC-Modules. Original scripts can be
+// accessed here: https://earthengine.googlesource.com/users/USFS_GTAC/modules/+/refs/heads/master
+
+// All files can be viewed befor export. For bulk export (clicking the run 
+// button), jump to the bottom of the script for a browser function to auto click run on all scenes.
+// the individual scenes are then exported to a storage bucket.
+
+// dave white
+// 10/26/23
+
+// User Parameters
+
+// Load in your composite from an Asset:
+// Navigate to your assets, open your composite. Select import.
+// In the imports you will see somethig like this: 
+//var image: Image users/dave-white/sandbox/S2_SR_median_2015_2021_135_181 (13 bands)
+
+// Is the imported composite Sentinel2 data?
+var isSen2 = true; // yes = true, no = false
+
+// The name of the bucket you will be exporting to.
+var outputFolder = 'dw-sandbox-bucket';
+
+// suffix - this is appended to the end of the file name.
+// the suffx should be something like seasonal constraint '_fall', '_leafOn' or '' for blank
+var suffix = '';
+
+//  This is a short but descriptive prefix and becomes the folder within the bucket that the covariates
+//  are exported to 'covs' is default but can be changed to another folder name within the bucket.
+var nameTag = 'covs'; //keep as is
+
+// CRS- must be provided.  
+// Common crs codes: Web mercator is EPSG:4326, USGS Albers is EPSG:5070, 
+// WGS84 UTM N hemisphere is EPSG:326+ zone number (zone 12 N would be EPSG:32612) and S hemisphere is EPSG:327+ zone number
+var crs = 'EPSG:5070';
+
+// Specify transform if scale is null and snapping to known grid is needed
+var transform = null;//[10,0,-2361915.0,0,-10,3177735.0];
+
+// Specify scale if transform is null
+var scale = 30;// null;
+
+// Choose the resampling method: 'aggregate','near', 'bilinear', or 'bicubic'
+// Defaults to 'aggregate'
+// Aggregate is generally useful for aggregating pixels when reprojecting instead of resampling
+// A good example would be reprojecting S2 data to 30 m
+// If method other than 'near' is chosen, any map drawn on the fly that is not
+// reprojected, will appear blurred or not really represented properly
+// Use .reproject to view the actual resulting image (this will slow it down)
+var resampleMethod = 'bilinear';
+
+// End of user editable parameters
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// get data and prepare for spectral calculations
+
+// The following parameters do not need to be edited. 
+
+// get prefix - determine if s2 or ls data and assign a prefix that gets appended to the begining of the 
+// export file name
+function getPrefix (prefix){
+  if(isSen2==true){
+    prefix = 's2';
+  } else{
+    prefix = 'ls';
+  } return prefix;
+}
+var prefix = getPrefix(prefix);
+
+// GTAC function Library:
+//  This variable stores the location of the function library used in this script.
+var getImagesLib = require('users/USFS_GTAC/modules:getImagesLib2.js'); // DO NOT CHANGE 
+
+// Study Area (Area of Interest):
+var studyArea = image.geometry();//table; // import by asset or null to keep image boundary
+
+//Call the composite
+var composite = image; // This should be the same name as the import, this is where we are brining the data in.
+
+// create dictionary of band names for LS
+var selected_bands = ['blue', 'green', 'red', 'nir', 'swir1', 'swir2'];
+
+//Rename bands
+function renameBands (composite){
+  if(isSen2==true){
+      composite = composite.select(['B2','B3','B4','B5','B6','B7','B8','B8A', 'B11','B12'],
+      ['blue', 'green', 'red', 're1','re2','re3','nir', 'nir2', 'swir1', 'swir2']);
+      print("multiple replace in composite");
+  } else{
+    composite = composite.select(selected_bands);
+  } return composite;
+}
+var composite = renameBands(composite);
+
+// add constant to avoid dividing by 0 errors when calculating indicies
+var composite = composite.add(1);
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  
+
+/// create spectral incicies
+
+// adjusted transformed soil-adjusted vegitation index
+var atsavi = composite.expression(
+  'a*((NIR-a*RED-b)/(a*NIR+RED-a*b+x*(1+a**2)))',{
+    'a' : 1.22,
+    'b' : 0.03,
+    'x' : 0.08,
+    'NIR' : composite.select('nir'),
+    'RED' : composite.select('red')
+  }).rename('ATSAVI');
+var composite = composite.addBands(atsavi);
+
+// atmospherically resistant vegetation index 2
+var arvi2 = composite.expression(
+  '-0.18 + 1.17*((NIR-RED)/(NIR+RED))', {
+    'NIR': composite.select('nir'),
+    'RED': composite.select('red')
+  }).rename('ARVI2');
+var composite = composite.addBands(arvi2);
+
+// blue-wide dynamic range vegetation index
+var bwdrvi = composite.expression(
+  '(0.1*NIR-BLUE)/(0.1*NIR+BLUE)',{
+    'NIR': composite.select('nir'),
+    'BLUE': composite.select('blue')
+}).rename('BWDRVI');
+var composite = composite.addBands(bwdrvi);
+
+// chlorophyll index green
+var cigreen = composite.expression(
+  '(NIR/GREEN)-1',{
+    'NIR': composite.select('nir'),
+    'GREEN': composite.select('green')
+  }).rename('CIgreen');
+var composite = composite.addBands(cigreen);
+
+// chlorophyll vegetation index
+var cvi = composite.expression(
+  'NIR * (RED/(GREEN**2))',{
+    'NIR': composite.select('nir'),
+    'RED': composite.select('red'),
+    'GREEN': composite.select('green')
+}).rename('CVI');
+var composite = composite.addBands(cvi);
+
+// coloration index
+var ci = composite.expression(
+  '((RED-BLUE)/RED)', {
+  'RED': composite.select('red'),
+  'BLUE': composite.select('blue')
+}).rename('CI');
+var composite = composite.addBands(ci);
+
+// NDVI
+var ndvi = composite.select('nir', 'red').normalizedDifference().rename('NDVI');
+var composite = composite.addBands(ndvi);
+
+// corrected transformed vegetation index
+var ctvi =composite.expression(
+  '((NDVI+0.5)/(abs(NDVI+0.5)))*sqrt(abs(NDVI + 0.5))',{
+   'NDVI': composite.select('NDVI') 
+  }).rename('CTVI');
+var composite = composite.addBands(ctvi);
+
+// green difference vegetation index
+var gdvi = composite.expression(
+  'NIR - GREEN',{
+    'NIR' : composite.select('nir'),
+    'GREEN' : composite.select('green')
+  }).rename('GDVI');
+var composite = composite.addBands(gdvi);
+
+// enhanced vegetation index
+var evi = composite.expression(
+  '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red'),
+     'BLUE': composite.select('blue')
+ }).rename('EVI');
+var composite = composite.addBands(evi);
+
+// enhanced vegetation index 2
+var evi2 = composite.expression(
+  '2.4 * ((NIR - RED) / (NIR + RED + 1))', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('EVI2');
+var composite = composite.addBands(evi2);
+
+// enhanced vegetation index 22
+var evi22 = composite.expression(
+  '2.5 * ((NIR - RED) / (NIR + 2.4 * RED + 1))', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('EVI22');
+var composite = composite.addBands(evi22);
+
+// global vegetation moisture index
+var gvmi = composite.expression(
+  '((NIR+0.1)-(SWIR1+0.02))/((NIR+0.1)+(SWIR1+0.02))', {
+     'NIR': composite.select('nir'),
+     'SWIR1': composite.select('swir1')
+ }).rename('GVMI');
+var composite = composite.addBands(gvmi);
+
+// green atmospherically resistant vegetaion index
+var gari = composite.expression(
+  '(NIR-(GREEN-(BLUE-RED)))/(NIR-(GREEN+(BLUE-RED)))',{
+    'NIR':composite.select('nir'),
+    'GREEN':composite.select('green'),
+    'BLUE':composite.select('blue'),
+    'RED': composite.select('red')
+}).rename('GARI');
+var composite = composite.addBands(gari);
+
+// green leaf index
+var gli  = composite.expression(
+  '(2*GREEN-RED-BLUE)/(2*GREEN+RED+BLUE)', {
+     'GREEN': composite.select('green'),
+     'RED': composite.select('red'),
+     'BLUE': composite.select('blue')
+ }).rename('GLI');
+var composite = composite.addBands(gli);
+
+// green optimized soil adjusted vegetation index
+var gosavi = composite.expression(
+  '(NIR - GREEN)/(NIR + GREEN + y)',{
+    'y': 0.16,
+    'NIR': composite.select('nir'),
+    'GREEN': composite.select('green')
+}).rename('GOSAVI');
+var composite = composite.addBands(gosavi);
+
+// green soil adjusted vegetation index
+var gsavi  = composite.expression(
+  '((NIR-GREEN)/(NIR+GREEN+L))*(1+L)', {
+     'NIR': composite.select('nir'),
+     'GREEN': composite.select('green'),
+     'L': 0.5
+ }).rename('GSAVI');
+var composite = composite.addBands(gsavi);
+
+// green-blue ndvi
+var gbndvi  = composite.expression(
+  '(NIR-(GREEN+BLUE))/(NIR+(GREEN+BLUE))', {
+     'NIR': composite.select('nir'),
+     'GREEN':composite.select('green'),
+     'BLUE': composite.select('blue')
+ }).rename('GBNDVI');
+var composite = composite.addBands(gbndvi);
+
+// green-red NDVI
+var grndvi  = composite.expression(
+  '(NIR-(GREEN+RED))/(NIR+(GREEN+RED))', {
+     'NIR': composite.select('nir'),
+     'GREEN':composite.select('green'),
+     'RED': composite.select('red')
+ }).rename('GRNDVI');
+var composite = composite.addBands(grndvi);
+
+// hue
+var hue  = composite.expression(
+  'atan(((2*RED-GREEN-BLUE)/(30.5))*(GREEN-BLUE))', {
+     'RED': composite.select('red'),
+     'GREEN': composite.select('green'),
+     'BLUE': composite.select('blue')
+ }).rename('HUE');
+var composite = composite.addBands(hue);
+
+// infrared percentage vegetation index
+var ipvi = composite.expression(
+  '(((NIR)/(NIR+RED))/(2))*(NDVI+1)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red'),
+     'NDVI': composite.select('NDVI')
+ }).rename('IPVI');
+var composite = composite.addBands(ipvi);
+
+// intensity 
+var intensity  = composite.expression(
+  '(1/30.5)*(RED+GREEN+BLUE)', {
+     'RED': composite.select('red'),
+     'GREEN': composite.select('green'),
+     'BLUE': composite.select('blue')
+ }).rename('INTENSITY');
+var composite = composite.addBands(intensity);
+
+// log ratio
+var logr  = composite.expression(
+  'log(NIR/RED)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('LogR');
+var composite = composite.addBands(logr);
+
+// modified simple ration nir/red
+var msrnirred = composite.expression(
+  '((NIR/RED)-1)/(sqrt((NIR/RED)+1))', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red'),
+ }).rename('MSRnirRed');
+var composite = composite.addBands(msrnirred);
+
+// modified soil adjusted vegetation index
+var msavi = composite.expression(
+  '(2*NIR+1-sqrt((2*NIR+1)**2-8*(NIR-RED)))/(2)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('MSAVI');
+var composite = composite.addBands(msavi);
+
+// norm g
+var normg = composite.expression(
+  '(GREEN)/(NIR+RED+GREEN)', {
+     'GREEN': composite.select('green'),
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('NormG');
+var composite = composite.addBands(normg);
+
+// norm nir
+var normnir = composite.expression(
+  '(NIR)/(NIR+RED+GREEN)', {
+     'GREEN': composite.select('green'),
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('NormNIR');
+var composite = composite.addBands(normnir);
+
+// norm red
+var normr = composite.expression(
+  '(RED)/(NIR+RED+GREEN)', {
+     'GREEN': composite.select('green'),
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('NormR');
+var composite = composite.addBands(normr);
+
+// Index-Based Built-Up Index (IBI)
+var ibi_a = composite.expression(
+  '2*SWIR1/(SWIR1 + NIR)', {
+    'SWIR1': composite.select('swir1'),
+    'NIR': composite.select('nir')
+  }).rename('IBI_A');
+var ibi_b = composite.expression(
+  '(NIR/(NIR + RED)) + (GREEN/(GREEN + SWIR1))', {
+    'NIR': composite.select('nir'),
+    'RED': composite.select('red'),
+    'GREEN': composite.select('green'),
+    'SWIR1': composite.select('swir1')
+  }).rename('IBI_B');
+  ibi_a = ibi_a.addBands(ibi_b);
+var ibi = ibi_a.normalizedDifference(['IBI_A','IBI_B']);
+var composite  = composite.addBands(ibi.rename('IBI'));
+
+// Pan NDVI
+var pndvi = composite.expression(
+  '(NIR-(GREEN+RED+BLUE))/(NIR+(GREEN+RED+BLUE))', {
+     'NIR': composite.select('nir'),
+     'GREEN':composite.select('green'),
+     'RED':composite.select('red'),
+     'BLUE':composite.select('blue')
+ }).rename('PNDVI');
+var composite = composite.addBands(pndvi);
+
+// shape index
+var shidx = composite.expression(
+  '(2*RED-GREEN-BLUE)/(GREEN-BLUE)', {
+     'RED': composite.select('red'),
+     'GREEN': composite.select('green'),
+     'BLUE': composite.select('blue')
+ }).rename('SHIdx');
+var composite = composite.addBands(shidx);
+
+// simple ratio -- green ratio vegetation index
+var grvi = composite.expression(
+  '(NIR)/(GREEN)', {
+     'NIR': composite.select('nir'),
+     'GREEN': composite.select('green')
+ }).rename('GRVI');
+var composite = composite.addBands(grvi);
+
+// simple ratio -- difference vegetation index
+var dvi = composite.expression(
+  '(NIR)/(RED)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('DVI');
+var composite = composite.addBands(dvi);
+
+// simple ratio -- red blue Iron Oxide
+var feox = composite.expression(
+  '(RED)/(BLUE)', {
+     'RED': composite.select('red'),
+     'BLUE': composite.select('blue')
+ }).rename('FeOX');
+var composite = composite.addBands(feox);
+
+// simple ratio -- red green ratio
+var rgr = composite.expression(
+  '(RED)/(GREEN)', {
+     'RED': composite.select('red'),
+     'GREEN': composite.select('green')
+ }).rename('RGR');
+var composite = composite.addBands(rgr);
+
+// simple ratio -- red nir ratio
+var rrnir = composite.expression(
+  '(RED)/(NIR)', {
+     'RED': composite.select('red'),
+     'NIR': composite.select('nir')
+ }).rename('RRNIR');
+var composite = composite.addBands(rrnir);
+
+// simple ratio -- red swir1 ratio
+var rrswir = composite.expression(
+  '(RED)/(SWIR)', {
+     'RED': composite.select('red'),
+     'SWIR': composite.select('swir1')
+ }).rename('RRSWIR');
+var composite = composite.addBands(rrswir);
+
+// simple ratio -- swir1 nir - ferrous minerals
+var ferrous = composite.expression(
+  '(SWIR1)/(NIR)', {
+     'SWIR1': composite.select('swir1'),
+     'NIR': composite.select('nir')
+ }).rename('FerMin');
+var composite = composite.addBands(ferrous);
+
+// clay minerals swir1/swir2
+// simple ratio -- swir1 swir2 ratio
+var clayMin = composite.expression(
+  '(SWIR1)/(SWIR2)', {
+     'SWIR1': composite.select('swir1'),
+     'SWIR2': composite.select('swir2')
+ }).rename('ClayMin');
+var composite = composite.addBands(clayMin);
+
+// soil adjusted vegetation index
+var savi = composite.expression(
+  '((1+L)*(NIR-RED))/(NIR+RED+L)', {
+    'L': 0.5,
+    'NIR': composite.select('nir'),
+    'RED': composite.select('red')
+  }).rename('SAVI');
+var composite = composite.addBands(savi);
+
+// soil adjusted total vegetation index
+var satvi = composite.expression(
+  '((SWIR1-RED)/(SWIR1+RED+L))*(1+L)-(SWIR2/2)', {
+    'L': 0.5,
+    'SWIR1': composite.select('swir1'),
+    'RED': composite.select('red'),
+    'SWIR2': composite.select('swir2')
+  }).rename('SATVI');
+var composite = composite.addBands(satvi);
+
+//Soil and Atmospherically resistant vegetation index 2
+var  sarvi2 = composite.expression(
+  '2.5*((NIR-RED)/(1+NIR+6*RED-7.5*BLUE))', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red'),
+     'BLUE': composite.select('blue')
+ }).rename('SARVI2');
+var composite = composite.addBands(sarvi2);
+
+// specific leaf area vegetation index
+var slavi = composite.expression(
+  '(NIR)/(RED+SWIR1)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red'),
+     'SWIR1': composite.select('swir1')
+ }).rename('SLAVI');
+var composite = composite.addBands(slavi);
+
+// sqrt IR / r
+var sqrtIRr = composite.expression(
+  'sqrt(NIR/RED)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('SqrtIrR');
+var composite = composite.addBands(sqrtIRr);
+
+//transformed NDVI
+var tndvi = composite.expression(
+  'sqrt(((NIR-RED)/(NIR+RED))+0.5)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('TNDVI');
+var composite = composite.addBands(tndvi);
+
+// transformed vegetation index
+var tvi = composite.expression(
+  'sqrt(NDVI+0.5)', {
+     'NDVI': composite.select('NDVI')
+ }).rename('TVI');
+var composite = composite.addBands(tvi);
+
+// weighted difference vegetation index
+//var wdvi = composite.expression(
+//  'NIR-((NIR/RED)*RED)', {
+//     'NIR': composite.select('nir'),
+//     'RED': composite.select('red')
+// }).float().rename('WDVI');
+//var composite = composite.addBands(wdvi);
+
+// wide dynamic range vegetation index
+var wdrvi = composite.expression(
+  '(0.1*NIR-RED)/(0.1*NIR+RED)', {
+     'NIR': composite.select('nir'),
+     'RED': composite.select('red')
+ }).rename('WDRVI');
+var composite = composite.addBands(wdrvi);
+
+//Normalized difference calcs
+composite = composite.addBands(composite.normalizedDifference(['blue','green']).rename('NDbg'));
+composite = composite.addBands(composite.normalizedDifference(['blue','red']).rename('NDbr'));
+composite = composite.addBands(composite.normalizedDifference(['blue','nir']).rename('NDbnir'));
+composite = composite.addBands(composite.normalizedDifference(['blue','swir1']).rename('NDbswir1'));
+composite = composite.addBands(composite.normalizedDifference(['blue','swir2']).rename('NDbswir2'));
+
+composite = composite.addBands(composite.normalizedDifference(['red','blue']).rename('NDrb'));
+composite = composite.addBands(composite.normalizedDifference(['red','green']).rename('NDrg'));// carbonate index
+composite = composite.addBands(composite.normalizedDifference(['red','nir']).rename('NDrnir'));
+composite = composite.addBands(composite.normalizedDifference(['red','swir1']).rename('NDrswir1'));
+composite = composite.addBands(composite.normalizedDifference(['red','swir2']).rename('NDrswir2'));
+
+composite = composite.addBands(composite.normalizedDifference(['green','blue']).rename('NDgb'));
+composite = composite.addBands(composite.normalizedDifference(['green','red']).rename('NDgr'));
+composite = composite.addBands(composite.normalizedDifference(['green','nir']).rename('NDgnir'));// water index //NDWBI
+composite = composite.addBands(composite.normalizedDifference(['green','swir1']).rename('NDgswir1')); //NDSI, MNDWI
+composite = composite.addBands(composite.normalizedDifference(['green','swir2']).rename('NDgswir2'));
+
+composite = composite.addBands(composite.normalizedDifference(['nir','blue']).rename('NDnirb'));
+//composite = composite.addBands(composite.normalizedDifference(['nir','red']).rename('NDnirr')); NDVI - calculated in script above
+composite = composite.addBands(composite.normalizedDifference(['nir','green']).rename('NDnirg'));
+composite = composite.addBands(composite.normalizedDifference(['nir','swir1']).rename('NDnirswir1'));//NDWI, LSWI, -NDBI
+composite = composite.addBands(composite.normalizedDifference(['nir','swir2']).rename('NDnirswir2'));//NBR, MNDVI normalized burn ratio
+
+composite = composite.addBands(composite.normalizedDifference(['swir1','blue']).rename('NDswir1b'));
+composite = composite.addBands(composite.normalizedDifference(['swir1','red']).rename('NDswir1r'));
+composite = composite.addBands(composite.normalizedDifference(['swir1','green']).rename('NDswir1g'));// rock index
+composite = composite.addBands(composite.normalizedDifference(['swir1','nir']).rename('NDswir1nir'));
+composite = composite.addBands(composite.normalizedDifference(['swir1','swir2']).rename('NDswir1swir2'));// gypsum index
+
+composite = composite.addBands(composite.normalizedDifference(['swir2','blue']).rename('NDswir2b'));
+composite = composite.addBands(composite.normalizedDifference(['swir2','red']).rename('NDswir2r'));
+composite = composite.addBands(composite.normalizedDifference(['swir2','green']).rename('NDswir2g'));
+composite = composite.addBands(composite.normalizedDifference(['swir2','nir']).rename('NDswir2nir'));
+composite = composite.addBands(composite.normalizedDifference(['swir2','swir1']).rename('NDswir2swir1'));
+
+// Calculate Tasseled cap image transformations - only for landsat
+if(isSen2==false){
+  // Load module that contains the function to compute the tasseled cap transformations
+var getImages = require('users/USFS_GTAC/modules:getImagesLib.js');
+
+// apply the tasseled cap transformation
+var TCall = getImages.getTasseledCap(composite);
+
+// Choose desired bands: brightness, greenness, wetness
+var TCbands = TCall.select("brightness", "greenness", "wetness", "fourth", "fifth", "sixth");
+
+// Stack onto Landsat image composite
+var composite = composite.addBands(TCbands);
+}
+
+
+// principal component analysis
+
+// select bands used for pca
+if(isSen2==true){
+  var PCAbands=['blue', 'green', 'red', 're1', 're2', 're3', 'nir', 'nir2', 'swir1', 'swir2'];}
+if(isSen2==false){
+  var PCAbands=['blue', 'green', 'red', 'nir', 'swir1', 'swir2'];}
+
+// filter the composite image down to only the pca bands selected
+var compositePCA = composite.select(PCAbands);
+
+// Set some information about the input to be used later.
+var scale = scale;
+var bandNames = compositePCA.bandNames();
+
+// Mean center the data to enable a faster covariance reducer
+// and an SD stretch of the principal components.
+var meanDict = compositePCA.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: studyArea,
+    scale: scale,
+    maxPixels: 1e9
+});
+var means = ee.Image.constant(meanDict.values(bandNames));
+var centered = compositePCA.subtract(means);
+
+// This helper function returns a list of new band names.
+var getNewBandNames = function(prefix) {
+  var seq = ee.List.sequence(1, bandNames.length());
+  return seq.map(function(b) {
+    return ee.String(prefix).cat(ee.Number(b).int());
+  });
+};
+
+// This function accepts mean centered imagery, a scale and
+// a region in which to perform the analysis.  It returns the
+// Principal Components (PC) in the region as a new image.
+var getPrincipalComponents = function(centered, scale, region) {
+  // Collapse the bands of the image into a 1D array per pixel.
+  var arrays = centered.toArray();
+
+  // Compute the covariance of the bands within the region.
+  var covar = arrays.reduceRegion({
+    reducer: ee.Reducer.centeredCovariance(),
+    geometry: studyArea,
+    scale: scale,
+    maxPixels: 1e9
+  });
+
+  // Get the 'array' covariance result and cast to an array.
+  // This represents the band-to-band covariance within the region.
+  var covarArray = ee.Array(covar.get('array'));
+
+  // Perform an eigen analysis and slice apart the values and vectors.
+  var eigens = covarArray.eigen();
+
+  // This is a P-length vector of Eigenvalues.
+  var eigenValues = eigens.slice(1, 0, 1);
+  // This is a PxP matrix with eigenvectors in rows.
+  var eigenVectors = eigens.slice(1, 1);
+
+  // Convert the array image to 2D arrays for matrix computations.
+  var arrayImage = arrays.toArray(1);
+
+  // Left multiply the image array by the matrix of eigenvectors.
+  var principalComponents = ee.Image(eigenVectors).matrixMultiply(arrayImage);
+
+  // Turn the square roots of the Eigenvalues into a P-band image.
+  var sdImage = ee.Image(eigenValues.sqrt())
+    .arrayProject([0]).arrayFlatten([getNewBandNames('sd')]);
+
+  // Turn the PCs into a P-band image, normalized by SD.
+  return principalComponents
+    // Throw out an an unneeded dimension, [[]] -> [].
+    .arrayProject([0])
+    // Make the one band array image a multi-band image, [] -> image.
+    .arrayFlatten([getNewBandNames('PC')])
+    // Normalize the PCs by their SDs.
+    .divide(sdImage);
+};
+
+// Get the PCs at the specified scale and in the specified region
+var pcImage = getPrincipalComponents(centered, scale, studyArea);
+var composite = composite.addBands(pcImage);
+
+
+print('all spectral covariates have been added:',composite);
+
+// Create maps for display
+
+// create viz params
+var rgbVis2 = {
+  min: 0,
+  max: 3000,
+  bands: ['red', 'green', 'blue'],};
+
+//display the image that will be exported
+Map.centerObject(composite);
+Map.addLayer(composite, {bands: ['PC1']}, 'pc1');
+Map.addLayer(composite, {min:0, max: 0.5, gamma: 1.3, bands: ['NDVI']}, 'ndvi');
+Map.addLayer(composite,rgbVis2, 'Composite');
+
+// export Indices function
+ function exportFunc(image, description, noData){
+   image = getImagesLib.setNoData(image, noData);
+   Export.image.toCloudStorage({
+       image: image.resample('bilinear'),
+       description: prefix+ description+suffix,
+       bucket: outputFolder,
+       fileNamePrefix: nameTag+ '/'+prefix+ description+suffix,
+       'scale' : scale,
+       crs: crs,
+       crsTransform:transform,
+       region: studyArea,
+       maxPixels: 1e13});
+ }
+
+// export function calls on each individual band
+if(isSen2==false){
+  exportFunc(composite.select('blue').int16(), 'Blue', -32768);
+  exportFunc(composite.select('green').int16(), 'Green', -32768);
+  exportFunc(composite.select('red').int16(), 'Red', -32768);
+  exportFunc(composite.select('nir').int16(), 'NIR', -32768);
+  exportFunc(composite.select('swir1').int16(), 'SWIR1', -32768);
+  exportFunc(composite.select('swir2').int16(), 'SWIR2', -32768);
+  exportFunc(composite.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', -32768);
+  exportFunc(composite.select('ARVI2').multiply(10000).int16(), 'ARVI2', -32768);
+  exportFunc(composite.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', -32768);
+  exportFunc(composite.select('CIgreen').multiply(1000).int16(), 'CIgreen', -32768);
+  exportFunc(composite.select('CVI').multiply(1000).int16(), 'CVI', -32768);
+  exportFunc(composite.select('CI').multiply(10000).int16(), 'CI', -32768);
+  exportFunc(composite.select('NDVI').multiply(10000).int16(), 'NDVI', -32768);
+  exportFunc(composite.select('CTVI').multiply(1000).int16(), 'CTVI', -32768);
+  exportFunc(composite.select('GDVI').multiply(10).int16(), 'GDVI', -32768);
+  exportFunc(composite.select('EVI').multiply(10000).int16(), 'EVI', -32768);
+  exportFunc(composite.select('EVI2').multiply(10000).int16(), 'EVI2', -32768);
+  exportFunc(composite.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
+  exportFunc(composite.select('GVMI').multiply(10000).int16(), 'GVMI', -32768);
+  exportFunc(composite.select('GARI').multiply(10000).int16(), 'GARI', -32768);
+  exportFunc(composite.select('GLI').multiply(10000).int16(), 'GLI', -32768);
+  exportFunc(composite.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', -32768);
+  exportFunc(composite.select('GSAVI').multiply(10000).int16(), 'GSAVI', -32768);
+  exportFunc(composite.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', -32768);
+  exportFunc(composite.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', -32768);
+  exportFunc(composite.select('HUE').multiply(10000).int16(), 'HUE', -32768);
+  exportFunc(composite.select('IPVI').multiply(10000).int16(), 'IPVI', -32768);
+  exportFunc(composite.select('INTENSITY').multiply(100).int16(), 'INTENSITY', -32768);
+  exportFunc(composite.select('LogR').multiply(10000).int16(), 'LogR', -32768);
+  exportFunc(composite.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', -32768);
+  exportFunc(composite.select('MSAVI').multiply(10000).int16(), 'MSAVI', -32768);
+  exportFunc(composite.select('NormG').multiply(10000).int16(), 'NormG', -32768);
+  exportFunc(composite.select('NormNIR').multiply(10000).int16(), 'NormNIR', -32768);
+  exportFunc(composite.select('NormR').multiply(10000).int16(), 'NormR', -32768);
+  exportFunc(composite.select('IBI').multiply(10000).int16(), 'IBI', -32768);
+  exportFunc(composite.select('PNDVI').multiply(10000).int16(), 'PNDVI', -32768);
+  exportFunc(composite.select('SHIdx').multiply(10000).int16(), 'SHIdx', -32768);
+  exportFunc(composite.select('GRVI').multiply(10000).int16(), 'GRVI', -32768);
+  exportFunc(composite.select('DVI').multiply(10000).int16(), 'DVI', -32768);
+  exportFunc(composite.select('FeOX').multiply(10000).int16(), 'FeOX', -32768);
+  exportFunc(composite.select('RGR').multiply(10000).int16(), 'RGR', -32768);
+  exportFunc(composite.select('RRNIR').multiply(10000).int16(), 'RRNIR', -32768);
+  exportFunc(composite.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', -32768);
+  exportFunc(composite.select('FerMin').multiply(10000).int16(), 'FerMin', -32768);
+  exportFunc(composite.select('ClayMin').multiply(10000).int16(), 'ClayMin', -32768);
+  exportFunc(composite.select('SAVI').multiply(10000).int16(), 'SAVI', -32768);
+  exportFunc(composite.select('SATVI').multiply(100).int16(), 'SATVI', -32768);
+  exportFunc(composite.select('SARVI2').multiply(10000).int16(), 'SARVI2', -32768);
+  exportFunc(composite.select('SLAVI').multiply(10000).int16(), 'SLAVI', -32768);
+  exportFunc(composite.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', -32768);
+  exportFunc(composite.select('TNDVI').multiply(10000).int16(), 'TNDVI', -32768);
+  exportFunc(composite.select('TVI').multiply(10000).int16(), 'TVI', -32768);
+  exportFunc(composite.select('WDRVI').multiply(10000).int16(), 'WDRVI', -32768);
+  exportFunc(composite.select('NDbg').multiply(10000).int16(), 'NDbg', -32768);
+  exportFunc(composite.select('NDbr').multiply(10000).int16(), 'NDbr', -32768);
+  exportFunc(composite.select('NDbnir').multiply(10000).int16(), 'NDbnir', -32768);
+  exportFunc(composite.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', -32768);
+  exportFunc(composite.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', -32768);
+  exportFunc(composite.select('NDrb').multiply(10000).int16(), 'NDrb', -32768);
+  exportFunc(composite.select('NDrg').multiply(10000).int16(), 'NDrg', -32768);
+  exportFunc(composite.select('NDrnir').multiply(10000).int16(), 'NDrnir', -32768);
+  exportFunc(composite.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', -32768);
+  exportFunc(composite.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', -32768);
+  exportFunc(composite.select('NDgb').multiply(10000).int16(), 'NDgb', -32768);
+  exportFunc(composite.select('NDgr').multiply(10000).int16(), 'NDgr', -32768);
+  exportFunc(composite.select('NDgnir').multiply(10000).int16(), 'NDgnir', -32768);
+  exportFunc(composite.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', -32768);
+  exportFunc(composite.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', -32768);
+  exportFunc(composite.select('NDnirb').multiply(10000).int16(), 'NDnirb', -32768);
+  exportFunc(composite.select('NDnirg').multiply(10000).int16(), 'NDnirg', -32768);
+  exportFunc(composite.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', -32768);
+  exportFunc(composite.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', -32768);
+  exportFunc(composite.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', -32768);
+  exportFunc(composite.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', -32768);
+  exportFunc(composite.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', -32768);
+  exportFunc(composite.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', -32768);
+  exportFunc(composite.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', -32768);
+  exportFunc(composite.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', -32768);
+  exportFunc(composite.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', -32768);
+  exportFunc(composite.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', -32768);
+  exportFunc(composite.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', -32768);
+  exportFunc(composite.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', -32768);
+  exportFunc(composite.select('brightness').multiply(10000).int16(), 'TCbright', -32768);
+  exportFunc(composite.select('greenness').multiply(10000).int16(), 'TCgreen', -32768);
+  exportFunc(composite.select('wetness').multiply(10000).int16(), 'TCwet', -32768);
+  exportFunc(composite.select('fourth').multiply(10000).int16(), 'TCfourth', -32768);
+  exportFunc(composite.select('fifth').multiply(10000).int16(), 'TCfifth', -32768);
+  exportFunc(composite.select('sixth').multiply(10000).int16(), 'TCsixth', -32768);
+  exportFunc(composite.select('PC1').multiply(10000).int16(), 'PC1', -32768);
+  exportFunc(composite.select('PC2').multiply(10000).int16(), 'PC2', -32768);
+  exportFunc(composite.select('PC3').multiply(10000).int16(), 'PC3', -32768);
+  exportFunc(composite.select('PC4').multiply(10000).int16(), 'PC4', -32768);
+  exportFunc(composite.select('PC5').multiply(10000).int16(), 'PC5', -32768);
+  exportFunc(composite.select('PC6').multiply(10000).int16(), 'PC6', -32768);
+} else {
+  exportFunc(composite.select('blue').int16(), 'Blue', -32768);
+  exportFunc(composite.select('green').int16(), 'Green', -32768);
+  exportFunc(composite.select('red').int16(), 'Red', -32768);
+  exportFunc(composite.select('re1').int16(), 'RE1', -32768);
+  exportFunc(composite.select('re2').int16(), 'RE2', -32768);
+  exportFunc(composite.select('re3').int16(), 'RE3', -32768);
+  exportFunc(composite.select('nir').int16(), 'NIR1', -32768);
+  exportFunc(composite.select('nir2').int16(), 'NIR2', -32768);
+  exportFunc(composite.select('swir1').int16(), 'SWIR1', -32768);
+  exportFunc(composite.select('swir2').int16(), 'SWIR2', -32768);
+  exportFunc(composite.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', -32768);
+  exportFunc(composite.select('ARVI2').multiply(10000).int16(), 'ARVI2', -32768);
+  exportFunc(composite.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', -32768);
+  exportFunc(composite.select('CIgreen').multiply(1000).int16(), 'CIgreen', -32768);
+  exportFunc(composite.select('CVI').multiply(1000).int16(), 'CVI', -32768);
+  exportFunc(composite.select('CI').multiply(10000).int16(), 'CI', -32768);
+  exportFunc(composite.select('NDVI').multiply(10000).int16(), 'NDVI', -32768);
+  exportFunc(composite.select('CTVI').multiply(1000).int16(), 'CTVI', -32768);
+  exportFunc(composite.select('GDVI').multiply(10).int16(), 'GDVI', -32768);
+  exportFunc(composite.select('EVI').multiply(10000).int16(), 'EVI', -32768);
+  exportFunc(composite.select('EVI2').multiply(10000).int16(), 'EVI2', -32768);
+  exportFunc(composite.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
+  exportFunc(composite.select('GVMI').multiply(10000).int16(), 'GVMI', -32768);
+  exportFunc(composite.select('GARI').multiply(10000).int16(), 'GARI', -32768);
+  exportFunc(composite.select('GLI').multiply(10000).int16(), 'GLI', -32768);
+  exportFunc(composite.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', -32768);
+  exportFunc(composite.select('GSAVI').multiply(10000).int16(), 'GSAVI', -32768);
+  exportFunc(composite.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', -32768);
+  exportFunc(composite.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', -32768);
+  exportFunc(composite.select('HUE').multiply(10000).int16(), 'HUE', -32768);
+  exportFunc(composite.select('IPVI').multiply(10000).int16(), 'IPVI', -32768);
+  exportFunc(composite.select('INTENSITY').multiply(100).int16(), 'INTENSITY', -32768);
+  exportFunc(composite.select('LogR').multiply(10000).int16(), 'LogR', -32768);
+  exportFunc(composite.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', -32768);
+  exportFunc(composite.select('MSAVI').multiply(10000).int16(), 'MSAVI', -32768);
+  exportFunc(composite.select('NormG').multiply(10000).int16(), 'NormG', -32768);
+  exportFunc(composite.select('NormNIR').multiply(10000).int16(), 'NormNIR', -32768);
+  exportFunc(composite.select('NormR').multiply(10000).int16(), 'NormR', -32768);
+  exportFunc(composite.select('IBI').multiply(10000).int16(), 'IBI', -32768);
+  exportFunc(composite.select('PNDVI').multiply(10000).int16(), 'PNDVI', -32768);
+  exportFunc(composite.select('SHIdx').multiply(10000).int16(), 'SHIdx', -32768);
+  exportFunc(composite.select('GRVI').multiply(10000).int16(), 'GRVI', -32768);
+  exportFunc(composite.select('DVI').multiply(10000).int16(), 'DVI', -32768);
+  exportFunc(composite.select('FeOX').multiply(10000).int16(), 'FeOX', -32768);
+  exportFunc(composite.select('RGR').multiply(10000).int16(), 'RGR', -32768);
+  exportFunc(composite.select('RRNIR').multiply(10000).int16(), 'RRNIR', -32768);
+  exportFunc(composite.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', -32768);
+  exportFunc(composite.select('FerMin').multiply(10000).int16(), 'FerMin', -32768);
+  exportFunc(composite.select('ClayMin').multiply(10000).int16(), 'ClayMin', -32768);
+  exportFunc(composite.select('SAVI').multiply(10000).int16(), 'SAVI', -32768);
+  exportFunc(composite.select('SATVI').multiply(100).int16(), 'SATVI', -32768);
+  exportFunc(composite.select('SARVI2').multiply(10000).int16(), 'SARVI2', -32768);
+  exportFunc(composite.select('SLAVI').multiply(10000).int16(), 'SLAVI', -32768);
+  exportFunc(composite.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', -32768);
+  exportFunc(composite.select('TNDVI').multiply(10000).int16(), 'TNDVI', -32768);
+  exportFunc(composite.select('TVI').multiply(10000).int16(), 'TVI', -32768);
+  exportFunc(composite.select('WDRVI').multiply(10000).int16(), 'WDRVI', -32768);
+  exportFunc(composite.select('NDbg').multiply(10000).int16(), 'NDbg', -32768);
+  exportFunc(composite.select('NDbr').multiply(10000).int16(), 'NDbr', -32768);
+  exportFunc(composite.select('NDbnir').multiply(10000).int16(), 'NDbnir', -32768);
+  exportFunc(composite.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', -32768);
+  exportFunc(composite.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', -32768);
+  exportFunc(composite.select('NDrb').multiply(10000).int16(), 'NDrb', -32768);
+  exportFunc(composite.select('NDrg').multiply(10000).int16(), 'NDrg', -32768);
+  exportFunc(composite.select('NDrnir').multiply(10000).int16(), 'NDrnir', -32768);
+  exportFunc(composite.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', -32768);
+  exportFunc(composite.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', -32768);
+  exportFunc(composite.select('NDgb').multiply(10000).int16(), 'NDgb', -32768);
+  exportFunc(composite.select('NDgr').multiply(10000).int16(), 'NDgr', -32768);
+  exportFunc(composite.select('NDgnir').multiply(10000).int16(), 'NDgnir', -32768);
+  exportFunc(composite.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', -32768);
+  exportFunc(composite.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', -32768);
+  exportFunc(composite.select('NDnirb').multiply(10000).int16(), 'NDnirb', -32768);
+  exportFunc(composite.select('NDnirg').multiply(10000).int16(), 'NDnirg', -32768);
+  exportFunc(composite.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', -32768);
+  exportFunc(composite.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', -32768);
+  exportFunc(composite.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', -32768);
+  exportFunc(composite.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', -32768);
+  exportFunc(composite.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', -32768);
+  exportFunc(composite.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', -32768);
+  exportFunc(composite.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', -32768);
+  exportFunc(composite.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', -32768);
+  exportFunc(composite.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', -32768);
+  exportFunc(composite.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', -32768);
+  exportFunc(composite.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', -32768);
+  exportFunc(composite.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', -32768);
+  exportFunc(composite.select('PC1').multiply(10000).int16(), 'PC1', -32768);
+  exportFunc(composite.select('PC2').multiply(10000).int16(), 'PC2', -32768);
+  exportFunc(composite.select('PC3').multiply(10000).int16(), 'PC3', -32768);
+  exportFunc(composite.select('PC4').multiply(10000).int16(), 'PC4', -32768);
+  exportFunc(composite.select('PC5').multiply(10000).int16(), 'PC5', -32768);
+  exportFunc(composite.select('PC6').multiply(10000).int16(), 'PC6', -32768);
+  exportFunc(composite.select('PC7').multiply(10000).int16(), 'PC7', -32768);
+  exportFunc(composite.select('PC8').multiply(10000).int16(), 'PC8', -32768);
+  exportFunc(composite.select('PC9').multiply(10000).int16(), 'PC9', -32768);
+  exportFunc(composite.select('PC10').multiply(10000).int16(), 'PC10', -32768);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Code for starting all tasks once this script has run (to eliminate need to click all 'Run' buttons in Tasks)
+
+//Press f12, to open a browser console
+
+// uncomment the functions runTaskList and confirmAll
+//copy and paste function calls into console hit enter after they have been pasted into the console
+
+// runTaskList function
+
+//function runTaskList(){
+//    $$('.run-button' ,$$('ee-task-pane')[0].shadowRoot).forEach(function(e) {
+//         e.click();
+//    })
+//}
+
+// confirmAll function - click okay after the run button.
+
+//function confirmAll() {
+//    $$('ee-table-config-dialog, ee-image-config-dialog').forEach(function(e) {
+//         var eeDialog = $$('ee-dialog', e.shadowRoot)[0]
+//         var paperDialog = $$('paper-dialog', eeDialog.shadowRoot)[0]
+//         $$('.ok-button', paperDialog)[0].click()
+//    })
+//}
+
+// to run the functions enter the following into the console:
+//runTaskList();
+//confirmAll();
+
+
+
+
+
+
+
+
