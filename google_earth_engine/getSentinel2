@@ -1,0 +1,127 @@
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+// getSentinel2
+//
+// This script generates a composite stack of Sentinel2 bands exported as a GEE Asset
+//
+// Bands Exported: 'cb', 'blue', 'green', 'red', 're1','re2','re3','nir', 'nir2', 'waterVapor', 'swir1', 'swir2'
+//
+// The composite is made using Sentinel2 satellite data of the given date and season range
+//
+//
+// last updated 10/23/23
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+// Study Area (Area of Interest):
+//  This is the project area boundary. The studyArea con be a featureCollection, feature, or geometry.
+//  Import project area shapefile as an asset to GEE. Then click on that asset to import into the script. 
+//  If importing from GEE asset it will come in as table. You can also use the geometry imports to draw 
+//  a polygon. This will show up as geometry in the imports section.
+var region = table; //geometry; // import by asset (table) or polygon drwaing imports from map (geometry) 
+
+var projectName = 'soils2026-class5-projects'; //project keep as is unless working on a differenct project
+
+var fileName = 'test_mst'; // should include aoi, and season (wet, dry, leafOn, leafOff, etc)
+
+//Specify scale if transform is null
+var scale = 30;
+
+//CRS- must be provided.  
+//Common crs codes: Web mercator is EPSG:4326, USGS Albers is EPSG:5070, 
+//WGS84 UTM N hemisphere is EPSG:326+ zone number (zone 12 N would be EPSG:32612) and S hemisphere is EPSG:327+ zone number
+var crs = 'EPSG:5070';
+
+
+//Specify resample method
+var resampleMethod = 'bilinear';
+
+// define years and DOYs
+var startYear = 2019;
+var endYear = 2023; // exclusive
+var startDOY = 91;
+var endDOY = 151; // inclusive
+ 
+ 
+ 
+ ///////////////////////////////////////////
+ 
+// define cloud probability threshold
+var cloudProbability = 50;
+
+function bilinear(img) {
+  return img.resample(resampleMethod);
+}
+
+// mask clouds and edges
+function s2masking(img) {
+  var clouds = ee.Image(img.get('cloud_mask')).select('probability');
+  var isNotCloud = clouds.lt(cloudProbability);
+  return ee.Image(img)
+    .updateMask(isNotCloud).select(['B.*'])
+    //.updateMask(img.select('B8A').mask().updateMask(img.select('B9').mask()))
+    .copyProperties(img);
+}
+
+
+// S2 cloud probability
+var s2cloud = ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY")
+  .filter(ee.Filter.date(ee.Date.fromYMD(startYear, 1, 1), ee.Date.fromYMD(endYear, 1, 1)))
+  .filter(ee.Filter.dayOfYear(startDOY, endDOY))
+  .filterBounds(region)
+  .map(bilinear);
+
+// S2 SR 
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filter(ee.Filter.date(ee.Date.fromYMD(startYear, 1, 1), ee.Date.fromYMD(endYear, 1, 1)))
+  .filter(ee.Filter.dayOfYear(startDOY, endDOY))
+  .filterBounds(region)
+  .map(bilinear);
+
+var s2joined = ee.Join.saveFirst('cloud_mask').apply({
+  primary: s2,
+  secondary: s2cloud,
+  condition:
+    ee.Filter.equals({leftField: 'system:index', rightField: 'system:index'})
+});
+
+var s2masked = ee.ImageCollection(s2joined)
+  .map(s2masking);
+
+var s2final = s2masked
+  .median();
+
+var visualization = {
+  min: 0.0,
+  max: 3000,
+  bands: ['B4', 'B3', 'B2'],
+};
+
+// add to map
+//Load the study region, with a blue outline.
+//Create an empty image into which to paint the features, cast to byte.
+//Paint all the polygon edges with the same number and width, display.
+var empty = ee.Image().byte();
+var outline = empty.paint({
+  featureCollection: region,
+  color: 1,
+  width: 3
+});
+Map.addLayer(s2final.clip(region), visualization, 'S2', true);
+Map.addLayer(outline, {palette: '0000FF'}, "Study Area", true);
+Map.centerObject(region);
+//export
+// Export the image, specifying scale and region.
+Export.image.toAsset({
+  image: s2final.clip(region),
+  description: 'sen2'+'_'+fileName+'_'+startYear+'-'+endYear,
+  assetId: 'projects/'+projectName+'/assets/'+'sen2'+'_'+fileName+'_'+startYear+'-'+endYear,
+  scale: scale,
+  maxPixels: 1e13, 
+  crs:crs,
+  region: region
+    });
+    
+//print(s2final.clip(region));
