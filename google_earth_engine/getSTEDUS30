@@ -1,0 +1,100 @@
+// get_STEDUS30_data
+//
+//Date: 05/04/2023
+//
+//
+//
+var image = ee.Image('projects/ncss-30m-covariates/assets/STEDUS30');
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// User Editable Variables
+//
+//Study Area (Area of Interest):
+
+studyArea = table; // import by drawing a polygon or from assets
+
+var scale = 30; 
+var crs = 'EPSG:5070';
+// Set up Names for the export
+var outputName = 'cov30'; // prefix to the file - use something like SSAID (NM688)
+//var suffix ='wet'
+// Provide location composites will be exported to
+// storage bucket
+var outputFolder = '8-vic-class5';
+
+
+/////////////////////////////////////////////////////////////////////////////////////
+//
+/////////////////////////////////////////////////////////////////////////////////////
+//print(studyArea);
+var studyArea = ee.FeatureCollection(studyArea);
+//var geom = ee.geometry(studyArea);
+
+var sted = image;
+
+var stedClip = sted.clip(studyArea);
+
+print(stedClip);
+
+/////////////////////////////////////////////////////////////////////////////////////
+// 3. DISPLAY
+/////////////////////////////////////////////////////////////////////////////////////
+
+
+// Display topo derivatives 
+//Map.addLayer(buffered, '','buffered')
+Map.centerObject(studyArea);
+Map.addLayer(studyArea, '', 'composite area');
+//Map.addLayer(elevClip, {min: 400, max:2100}, 'aspct_16');
+Map.addLayer(stedClip, '', 'aspct_16');
+
+
+/////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+
+// export
+// export Indices function
+ function exportFunc(image, description, noData){
+  // image = getImagesLib.setNoData(image, noData);
+   Export.image.toCloudStorage({
+       image: image.resample('bilinear'),
+       description:description,
+       bucket: outputFolder,
+       //suffix:suffix,
+       fileNamePrefix: outputName+ '/'+ description, //+ '_' +suffix,
+       'scale' : scale,
+       crs: crs,
+       //crsTransform:transform,
+       region: studyArea,
+       //shardSize: 256,
+       //fileDimensions: 131072, //make larger than export image dimensions, must be multiple of shardSize
+       maxPixels: 1e13});
+ }
+ 
+ 
+var bandNames = sted.bandNames().getInfo();
+
+for (var band = 0; band < bandNames.length; band++) {
+  exportFunc(stedClip.select(bandNames[band]), bandNames[band])
+}
+ 
+ 
+ 
+//Finally, paste function calls into console
+// runTaskList function - clicks th button
+
+function runTaskList(){
+    $$('.run-button' ,$$('ee-task-pane')[0].shadowRoot).forEach(function(e) {
+         e.click();
+    })
+}
+
+// confirmAll function - click okay after the run button.
+
+function confirmAll() {
+    $$('ee-table-config-dialog, ee-image-config-dialog').forEach(function(e) {
+         var eeDialog = $$('ee-dialog', e.shadowRoot)[0]
+         var paperDialog = $$('paper-dialog', eeDialog.shadowRoot)[0]
+         $$('.ok-button', paperDialog)[0].click()
+    })
+}
