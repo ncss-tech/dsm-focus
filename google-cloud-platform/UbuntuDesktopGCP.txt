@@ -1,0 +1,168 @@
+Setting up an Ubuntu desktop environment virtual machine on GCP
+
+9/12/23
+
+
+========================================================================================================================
+
+1. Creating a VM instance
+
+Navigate to your project
+Click on compute engine
+VM instances
+CREATE INSTANCE
+Set the Region and Zone to one that is close to you - make note of the region and zone, they will be important later on
+Set the Series and Machine Type
+Change Boot disk OS to Ubuntu 22.04 LTS x86/64
+Click Allow HTTP and HTTPS traffic
+Click Create
+
+
+========================================================================================================================
+
+2. Install xfce desktop environment
+
+Navigate to your project
+Navigate to the VM instances page
+Open a terminal by selecting the SSH button on the VM you created
+Enter the following into the terminal:
+	1. update packages
+	sudo apt-get update -y && sudo apt-get upgrade -y
+	
+	2. install desktop environment
+	sudo apt install xfce4 xfce4-goodies -y	    /// change this line to install other desktop environemtnts
+						    /// ... install ubuntu-desktop, ... install lubuntu-desktop etc
+	3. install remote desktop application
+	sudo apt install xrdp -y
+
+	4. start remote desktop service
+	sudo systemctl start xrdp
+	
+	5. setup root password
+	sudo passwd root
+	
+	6. reboot machine
+	sudo reboot
+ 
+========================================================================================================================
+
+3. Installing software
+
+Navigate to the VM instances page
+Open a terminal by selecting SSH on the VM you created
+Enter the following into the terminal:
+	1. update packages
+	sudo apt-get update -y
+
+	2. Firefox Browser
+	sudo apt -y install firefox
+
+	3. QGIS
+	sudo apt-get -y install qgis
+
+	4 SAGA GIS
+	sudo apt-get -y install saga
+
+	5. R and RStudio
+	sudo apt -y install r-base
+
+	wget https://download1.rstudio.org/electron/jammy/amd64/rstudio-2023.03.0-386-amd64.deb
+
+	sudo apt -y install -f ./rstudio-2023.03.0-386-amd64.deb
+
+	6. Reboot
+	sudo reboot
+
+Navigate to the VM instances page
+Open a terminal by selecting SSH on the VM you created
+Enter the following into the terminal:
+	7. update
+	sudo apt-get update -y
+
+	8. get RStudio to open on click
+	sudo nano /usr/share/applications/rstudio.desktop
+
+	Add the following 	--no-sandbox 	in the Exec-line
+	ctrl+o saves
+	then press enter
+	ctrl+x exit
+
+	sudo reboot
+
+	9. Install necessary software to utilize packages in R
+
+	sudo apt-get install libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev
+ 
+	sudo apt-get install libudunits2-dev libgdal-dev libgeos-dev libproj-dev libmysqlclient-dev libjq-dev libprotobuf-dev protobuf-compiler -y
+
+ EXIT the SSH in browser
+
+========================================================================================================================
+
+3. Setting up GCS Fuse to mount storage buckets as a vm drive
+
+
+Navigate to the VM instances page
+Open a terminal by selecting SSH on the VM you created
+Enter the following into the terminal:
+
+	export GCSFUSE_REPO=gcsfuse-`lsb_release -c -s`
+
+	echo "deb https://packages.cloud.google.com/apt $GCSFUSE_REPO main" | sudo tee /etc/apt/sources.list.d/gcsfuse.list
+
+	curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+	sudo apt-get update
+
+	sudo apt-get install gcsfuse
+
+EXIT the SSH in browser
+Stop the VM instance by checking the box and selecting STOP
+Click on the activate cloud shell button located on the upper right hand side of the page next to the notifications and support buttons
+From the cloud shell change the permissions to give vm access to buckets change the machine name and zone to match yours:
+ 
+	gcloud beta compute instances set-scopes ubuntu-desktop-template --scopes=storage-full --zone=us-west4-a
+
+When Prompted click on AUTHORIZE
+Close the cloud shell by clicking on the X in the upper right hand corner
+Start the VM instance by checing the box and selecting START
+
+Navigate to the storage bucket you want to connect to the VM
+Copy the name of the bucket.
+
+
+Navigate to the VM instances page
+Open a terminal by selecting SSH on the VM you created
+Enter the following into the terminal (be sure to put the copied name of the bucket where it says name-of-bucket):
+
+	1. get the uid (enter your username where it says root)
+	id -u root
+
+	2. get the gid (enter your username where is says root)
+	id - g root
+
+	3. create directories
+	sudo mkdir -p /mnt/name-of-bucket
+
+	4. change to allow write permissions
+	sudo chmod a+w /mnt/name-of-bucket
+
+
+	5. open up and edit the fstab document
+	sudo nano /etc/fstab
+
+	#paste these into the editor on new lines (enter the uid and gid from steps 1 and 2 above)
+	name-of-bucket /mnt/name-of-bucket gcsfuse rw,_netdev,allow_other,uid=1000,gid=1000,file_mode=0776,dir_mode=0776
+	
+	6. ctrl o will write to the file, then press enter, then ctrl x to exit
+
+	7. sudo reboot
+========================================================================================================================
+
+4. Connecting to your Ubuntu desktop VM
+
+Using Windows Remote Desktop App to connect to your Ubuntu VM
+Copy the External IP address to clip board
+On your machine search for and open Remote Desktop Connection App
+Enter the IP address of your VM and click okay 
+log in using root as the username and the password you set up previously
