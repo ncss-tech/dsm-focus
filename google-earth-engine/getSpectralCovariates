@@ -25,7 +25,10 @@
 // Load in your composite from an Asset:
 // Navigate to your assets, open your composite. Select import.
 // In the imports you will see somethig like this: 
-//var image: Image users/dave-white/sandbox/S2_SR_median_2015_2021_135_181 (13 bands)
+//var image: Iage... 
+
+// Load in your study area, should be the asset/shapefile used to create spectral stack
+// var table: Table ....
 
 // Is the imported composite Sentinel2 data?
 var isSen2 = true; // yes = true, no = false
@@ -35,7 +38,7 @@ var outputFolder = 'dw-sandbox-bucket';
 
 // suffix - this is appended to the end of the file name.
 // the suffx should be something like seasonal constraint '_fall', '_leafOn' or '' for blank
-var suffix = '';
+var suffix = 'of';
 
 //  This is a short but descriptive prefix and becomes the folder within the bucket that the covariates
 //  are exported to 'covs' is default but can be changed to another folder name within the bucket.
@@ -44,13 +47,13 @@ var nameTag = 'covs'; //keep as is
 // CRS- must be provided.  
 // Common crs codes: Web mercator is EPSG:4326, USGS Albers is EPSG:5070, 
 // WGS84 UTM N hemisphere is EPSG:326+ zone number (zone 12 N would be EPSG:32612) and S hemisphere is EPSG:327+ zone number
-var crs = 'EPSG:5070';
+var crs = 'EPSG:4269';
 
 // Specify transform if scale is null and snapping to known grid is needed
 var transform = null;//[10,0,-2361915.0,0,-10,3177735.0];
 
 // Specify scale if transform is null
-var scale = 30;// null;
+var scale = 10;// null;
 
 // Choose the resampling method: 'aggregate','near', 'bilinear', or 'bicubic'
 // Defaults to 'aggregate'
@@ -59,8 +62,10 @@ var scale = 30;// null;
 // If method other than 'near' is chosen, any map drawn on the fly that is not
 // reprojected, will appear blurred or not really represented properly
 // Use .reproject to view the actual resulting image (this will slow it down)
-var resampleMethod = 'bilinear';
+var resampleMethod = 'bicubic';
 
+
+//var nodata = 
 // End of user editable parameters
 
 
@@ -87,7 +92,7 @@ var prefix = getPrefix(prefix);
 var getImagesLib = require('users/USFS_GTAC/modules:getImagesLib2.js'); // DO NOT CHANGE 
 
 // Study Area (Area of Interest):
-var studyArea = image.geometry();//table; // import by asset or null to keep image boundary
+var studyArea = table; // import by asset or null to keep image boundary
 
 //Call the composite
 var composite = image; // This should be the same name as the import, this is where we are brining the data in.
@@ -668,11 +673,12 @@ var getPrincipalComponents = function(centered, scale, region) {
 var pcImage = getPrincipalComponents(centered, scale, studyArea);
 var composite = composite.addBands(pcImage);
 
-
+// Set nodata and unmaskimage, 
+var noDataVal = -32768;
+var unmaskedImage = composite.unmask({value: noDataVal, sameFootprint: true});
 print('all spectral covariates have been added:',composite);
 
 // Create maps for display
-
 // create viz params
 var rgbVis2 = {
   min: 0,
@@ -685,214 +691,233 @@ Map.addLayer(composite, {bands: ['PC1']}, 'pc1');
 Map.addLayer(composite, {min:0, max: 0.5, gamma: 1.3, bands: ['NDVI']}, 'ndvi');
 Map.addLayer(composite,rgbVis2, 'Composite');
 
+function fillNoDataHoles(image){
+  var boxcar = ee.Kernel.square({
+     radius: 3, units: 'pixels', normalize: true
+   });
+   // Smooth the image by convolving with the boxcar kernel.
+  var outImage = outImage.convolve(boxcar);
+   var gaussianFilter = ee.Kernel.gaussian({
+     radius:3, sigma:2, units:'pixels', normalize:true
+   });
+   outImage = outImage.convolve(gaussianFilter);
+  return outImage;
+}
+
 // export Indices function
  function exportFunc(image, description, noData){
-   image = getImagesLib.setNoData(image, noData);
    Export.image.toCloudStorage({
-       image: image.resample('bilinear'),
-       description: prefix+ description+suffix,
+       image: image.resample(resampleMethod),
+       description: suffix+description,//prefix+suffix+description,
        bucket: outputFolder,
-       fileNamePrefix: nameTag+ '/'+prefix+ description+suffix,
+       fileNamePrefix: nameTag+ '/'+suffix+description,//+prefix+suffix+description,
        'scale' : scale,
        crs: crs,
        crsTransform:transform,
+       skipEmptyTiles: true,
        region: studyArea,
-       maxPixels: 1e13});
+       maxPixels: 1e13,
+       //priority: 1,
+       formatOptions: {
+    noData: noDataVal
+  }
+   });
  }
-
+//fill any holes in imagery
+//unmaskedImage= fillNoDataHoles(unmaskedImage);
 // export function calls on each individual band
 if(isSen2==false){
-  exportFunc(composite.select('blue').int16(), 'Blue', -32768);
-  exportFunc(composite.select('green').int16(), 'Green', -32768);
-  exportFunc(composite.select('red').int16(), 'Red', -32768);
-  exportFunc(composite.select('nir').int16(), 'NIR', -32768);
-  exportFunc(composite.select('swir1').int16(), 'SWIR1', -32768);
-  exportFunc(composite.select('swir2').int16(), 'SWIR2', -32768);
-  exportFunc(composite.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', -32768);
-  exportFunc(composite.select('ARVI2').multiply(10000).int16(), 'ARVI2', -32768);
-  exportFunc(composite.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', -32768);
-  exportFunc(composite.select('CIgreen').multiply(1000).int16(), 'CIgreen', -32768);
-  exportFunc(composite.select('CVI').multiply(1000).int16(), 'CVI', -32768);
-  exportFunc(composite.select('CI').multiply(10000).int16(), 'CI', -32768);
-  exportFunc(composite.select('NDVI').multiply(10000).int16(), 'NDVI', -32768);
-  exportFunc(composite.select('CTVI').multiply(1000).int16(), 'CTVI', -32768);
-  exportFunc(composite.select('GDVI').multiply(10).int16(), 'GDVI', -32768);
-  exportFunc(composite.select('EVI').multiply(10000).int16(), 'EVI', -32768);
-  exportFunc(composite.select('EVI2').multiply(10000).int16(), 'EVI2', -32768);
-  exportFunc(composite.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
-  exportFunc(composite.select('GVMI').multiply(10000).int16(), 'GVMI', -32768);
-  exportFunc(composite.select('GARI').multiply(10000).int16(), 'GARI', -32768);
-  exportFunc(composite.select('GLI').multiply(10000).int16(), 'GLI', -32768);
-  exportFunc(composite.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', -32768);
-  exportFunc(composite.select('GSAVI').multiply(10000).int16(), 'GSAVI', -32768);
-  exportFunc(composite.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', -32768);
-  exportFunc(composite.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', -32768);
-  exportFunc(composite.select('HUE').multiply(10000).int16(), 'HUE', -32768);
-  exportFunc(composite.select('IPVI').multiply(10000).int16(), 'IPVI', -32768);
-  exportFunc(composite.select('INTENSITY').multiply(100).int16(), 'INTENSITY', -32768);
-  exportFunc(composite.select('LogR').multiply(10000).int16(), 'LogR', -32768);
-  exportFunc(composite.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', -32768);
-  exportFunc(composite.select('MSAVI').multiply(10000).int16(), 'MSAVI', -32768);
-  exportFunc(composite.select('NormG').multiply(10000).int16(), 'NormG', -32768);
-  exportFunc(composite.select('NormNIR').multiply(10000).int16(), 'NormNIR', -32768);
-  exportFunc(composite.select('NormR').multiply(10000).int16(), 'NormR', -32768);
-  exportFunc(composite.select('IBI').multiply(10000).int16(), 'IBI', -32768);
-  exportFunc(composite.select('PNDVI').multiply(10000).int16(), 'PNDVI', -32768);
-  exportFunc(composite.select('SHIdx').multiply(10000).int16(), 'SHIdx', -32768);
-  exportFunc(composite.select('GRVI').multiply(10000).int16(), 'GRVI', -32768);
-  exportFunc(composite.select('DVI').multiply(10000).int16(), 'DVI', -32768);
-  exportFunc(composite.select('FeOX').multiply(10000).int16(), 'FeOX', -32768);
-  exportFunc(composite.select('RGR').multiply(10000).int16(), 'RGR', -32768);
-  exportFunc(composite.select('RRNIR').multiply(10000).int16(), 'RRNIR', -32768);
-  exportFunc(composite.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', -32768);
-  exportFunc(composite.select('FerMin').multiply(10000).int16(), 'FerMin', -32768);
-  exportFunc(composite.select('ClayMin').multiply(10000).int16(), 'ClayMin', -32768);
-  exportFunc(composite.select('SAVI').multiply(10000).int16(), 'SAVI', -32768);
-  exportFunc(composite.select('SATVI').multiply(100).int16(), 'SATVI', -32768);
-  exportFunc(composite.select('SARVI2').multiply(10000).int16(), 'SARVI2', -32768);
-  exportFunc(composite.select('SLAVI').multiply(10000).int16(), 'SLAVI', -32768);
-  exportFunc(composite.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', -32768);
-  exportFunc(composite.select('TNDVI').multiply(10000).int16(), 'TNDVI', -32768);
-  exportFunc(composite.select('TVI').multiply(10000).int16(), 'TVI', -32768);
-  exportFunc(composite.select('WDRVI').multiply(10000).int16(), 'WDRVI', -32768);
-  exportFunc(composite.select('NDbg').multiply(10000).int16(), 'NDbg', -32768);
-  exportFunc(composite.select('NDbr').multiply(10000).int16(), 'NDbr', -32768);
-  exportFunc(composite.select('NDbnir').multiply(10000).int16(), 'NDbnir', -32768);
-  exportFunc(composite.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', -32768);
-  exportFunc(composite.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', -32768);
-  exportFunc(composite.select('NDrb').multiply(10000).int16(), 'NDrb', -32768);
-  exportFunc(composite.select('NDrg').multiply(10000).int16(), 'NDrg', -32768);
-  exportFunc(composite.select('NDrnir').multiply(10000).int16(), 'NDrnir', -32768);
-  exportFunc(composite.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', -32768);
-  exportFunc(composite.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', -32768);
-  exportFunc(composite.select('NDgb').multiply(10000).int16(), 'NDgb', -32768);
-  exportFunc(composite.select('NDgr').multiply(10000).int16(), 'NDgr', -32768);
-  exportFunc(composite.select('NDgnir').multiply(10000).int16(), 'NDgnir', -32768);
-  exportFunc(composite.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', -32768);
-  exportFunc(composite.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', -32768);
-  exportFunc(composite.select('NDnirb').multiply(10000).int16(), 'NDnirb', -32768);
-  exportFunc(composite.select('NDnirg').multiply(10000).int16(), 'NDnirg', -32768);
-  exportFunc(composite.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', -32768);
-  exportFunc(composite.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', -32768);
-  exportFunc(composite.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', -32768);
-  exportFunc(composite.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', -32768);
-  exportFunc(composite.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', -32768);
-  exportFunc(composite.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', -32768);
-  exportFunc(composite.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', -32768);
-  exportFunc(composite.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', -32768);
-  exportFunc(composite.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', -32768);
-  exportFunc(composite.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', -32768);
-  exportFunc(composite.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', -32768);
-  exportFunc(composite.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', -32768);
-  exportFunc(composite.select('brightness').multiply(10000).int16(), 'TCbright', -32768);
-  exportFunc(composite.select('greenness').multiply(10000).int16(), 'TCgreen', -32768);
-  exportFunc(composite.select('wetness').multiply(10000).int16(), 'TCwet', -32768);
-  exportFunc(composite.select('fourth').multiply(10000).int16(), 'TCfourth', -32768);
-  exportFunc(composite.select('fifth').multiply(10000).int16(), 'TCfifth', -32768);
-  exportFunc(composite.select('sixth').multiply(10000).int16(), 'TCsixth', -32768);
-  exportFunc(composite.select('PC1').multiply(10000).int16(), 'PC1', -32768);
-  exportFunc(composite.select('PC2').multiply(10000).int16(), 'PC2', -32768);
-  exportFunc(composite.select('PC3').multiply(10000).int16(), 'PC3', -32768);
-  exportFunc(composite.select('PC4').multiply(10000).int16(), 'PC4', -32768);
-  exportFunc(composite.select('PC5').multiply(10000).int16(), 'PC5', -32768);
-  exportFunc(composite.select('PC6').multiply(10000).int16(), 'PC6', -32768);
+  exportFunc(unmaskedImage.select('blue').int16(), 'Blue', noDataVal);
+  exportFunc(unmaskedImage.select('green').int16(), 'Green', noDataVal);
+  exportFunc(unmaskedImage.select('red').int16(), 'Red', noDataVal);
+  exportFunc(unmaskedImage.select('nir').int16(), 'NIR', noDataVal);
+  exportFunc(unmaskedImage.select('swir1').int16(), 'SWIR1', noDataVal);
+  exportFunc(unmaskedImage.select('swir2').int16(), 'SWIR2', noDataVal);
+  exportFunc(unmaskedImage.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('ARVI2').multiply(10000).int16(), 'ARVI2', noDataVal);
+  exportFunc(unmaskedImage.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', noDataVal);
+  exportFunc(unmaskedImage.select('CIgreen').multiply(1000).int16(), 'CIgreen', noDataVal);
+  exportFunc(unmaskedImage.select('CVI').multiply(1000).int16(), 'CVI', noDataVal);
+  exportFunc(unmaskedImage.select('CI').multiply(10000).int16(), 'CI', noDataVal);
+  exportFunc(unmaskedImage.select('NDVI').multiply(10000).int16(), 'NDVI', noDataVal);
+  exportFunc(unmaskedImage.select('CTVI').multiply(1000).int16(), 'CTVI', noDataVal);
+  exportFunc(unmaskedImage.select('GDVI').multiply(10).int16(), 'GDVI', noDataVal);
+  exportFunc(unmaskedImage.select('EVI').multiply(10000).int16(), 'EVI', noDataVal);
+  exportFunc(unmaskedImage.select('EVI2').multiply(10000).int16(), 'EVI2', noDataVal);
+  exportFunc(unmaskedImage.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
+  exportFunc(unmaskedImage.select('GVMI').multiply(10000).int16(), 'GVMI', noDataVal);
+  exportFunc(unmaskedImage.select('GARI').multiply(10000).int16(), 'GARI', noDataVal);
+  exportFunc(unmaskedImage.select('GLI').multiply(10000).int16(), 'GLI', noDataVal);
+  exportFunc(unmaskedImage.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('GSAVI').multiply(10000).int16(), 'GSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('HUE').multiply(10000).int16(), 'HUE', noDataVal);
+  exportFunc(unmaskedImage.select('IPVI').multiply(10000).int16(), 'IPVI', noDataVal);
+  exportFunc(unmaskedImage.select('INTENSITY').multiply(100).int16(), 'INTENSITY', noDataVal);
+  exportFunc(unmaskedImage.select('LogR').multiply(10000).int16(), 'LogR', noDataVal);
+  exportFunc(unmaskedImage.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', noDataVal);
+  exportFunc(unmaskedImage.select('MSAVI').multiply(10000).int16(), 'MSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('NormG').multiply(10000).int16(), 'NormG', noDataVal);
+  exportFunc(unmaskedImage.select('NormNIR').multiply(10000).int16(), 'NormNIR', noDataVal);
+  exportFunc(unmaskedImage.select('NormR').multiply(10000).int16(), 'NormR', noDataVal);
+  exportFunc(unmaskedImage.select('IBI').multiply(10000).int16(), 'IBI', noDataVal);
+  exportFunc(unmaskedImage.select('PNDVI').multiply(10000).int16(), 'PNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('SHIdx').multiply(10000).int16(), 'SHIdx', noDataVal);
+  exportFunc(unmaskedImage.select('GRVI').multiply(10000).int16(), 'GRVI', noDataVal);
+  exportFunc(unmaskedImage.select('DVI').multiply(10000).int16(), 'DVI', noDataVal);
+  exportFunc(unmaskedImage.select('FeOX').multiply(10000).int16(), 'FeOX', noDataVal);
+  exportFunc(unmaskedImage.select('RGR').multiply(10000).int16(), 'RGR', noDataVal);
+  exportFunc(unmaskedImage.select('RRNIR').multiply(10000).int16(), 'RRNIR', noDataVal);
+  exportFunc(unmaskedImage.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', noDataVal);
+  exportFunc(unmaskedImage.select('FerMin').multiply(10000).int16(), 'FerMin', noDataVal);
+  exportFunc(unmaskedImage.select('ClayMin').multiply(10000).int16(), 'ClayMin', noDataVal);
+  exportFunc(unmaskedImage.select('SAVI').multiply(10000).int16(), 'SAVI', noDataVal);
+  exportFunc(unmaskedImage.select('SATVI').multiply(100).int16(), 'SATVI', noDataVal);
+  exportFunc(unmaskedImage.select('SARVI2').multiply(10000).int16(), 'SARVI2', noDataVal);
+  exportFunc(unmaskedImage.select('SLAVI').multiply(10000).int16(), 'SLAVI', noDataVal);
+  exportFunc(unmaskedImage.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', noDataVal);
+  exportFunc(unmaskedImage.select('TNDVI').multiply(10000).int16(), 'TNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('TVI').multiply(10000).int16(), 'TVI', noDataVal);
+  exportFunc(unmaskedImage.select('WDRVI').multiply(10000).int16(), 'WDRVI', noDataVal);
+  exportFunc(unmaskedImage.select('NDbg').multiply(10000).int16(), 'NDbg', noDataVal);
+  exportFunc(unmaskedImage.select('NDbr').multiply(10000).int16(), 'NDbr', noDataVal);
+  exportFunc(unmaskedImage.select('NDbnir').multiply(10000).int16(), 'NDbnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDrb').multiply(10000).int16(), 'NDrb', noDataVal);
+  exportFunc(unmaskedImage.select('NDrg').multiply(10000).int16(), 'NDrg', noDataVal);
+  exportFunc(unmaskedImage.select('NDrnir').multiply(10000).int16(), 'NDrnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDgb').multiply(10000).int16(), 'NDgb', noDataVal);
+  exportFunc(unmaskedImage.select('NDgr').multiply(10000).int16(), 'NDgr', noDataVal);
+  exportFunc(unmaskedImage.select('NDgnir').multiply(10000).int16(), 'NDgnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirb').multiply(10000).int16(), 'NDnirb', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirg').multiply(10000).int16(), 'NDnirg', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', noDataVal);
+  exportFunc(unmaskedImage.select('brightness').multiply(10000).int16(), 'TCbright', noDataVal);
+  exportFunc(unmaskedImage.select('greenness').multiply(10000).int16(), 'TCgreen', noDataVal);
+  exportFunc(unmaskedImage.select('wetness').multiply(10000).int16(), 'TCwet', noDataVal);
+  exportFunc(unmaskedImage.select('fourth').multiply(10000).int16(), 'TCfourth', noDataVal);
+  exportFunc(unmaskedImage.select('fifth').multiply(10000).int16(), 'TCfifth', noDataVal);
+  exportFunc(unmaskedImage.select('sixth').multiply(10000).int16(), 'TCsixth', noDataVal);
+  exportFunc(unmaskedImage.select('PC1').multiply(10000).int16(), 'PC1', noDataVal);
+  exportFunc(unmaskedImage.select('PC2').multiply(10000).int16(), 'PC2', noDataVal);
+  exportFunc(unmaskedImage.select('PC3').multiply(10000).int16(), 'PC3', noDataVal);
+  exportFunc(unmaskedImage.select('PC4').multiply(10000).int16(), 'PC4', noDataVal);
+  exportFunc(unmaskedImage.select('PC5').multiply(10000).int16(), 'PC5', noDataVal);
+  exportFunc(unmaskedImage.select('PC6').multiply(10000).int16(), 'PC6', noDataVal);
 } else {
-  exportFunc(composite.select('blue').int16(), 'Blue', -32768);
-  exportFunc(composite.select('green').int16(), 'Green', -32768);
-  exportFunc(composite.select('red').int16(), 'Red', -32768);
-  exportFunc(composite.select('re1').int16(), 'RE1', -32768);
-  exportFunc(composite.select('re2').int16(), 'RE2', -32768);
-  exportFunc(composite.select('re3').int16(), 'RE3', -32768);
-  exportFunc(composite.select('nir').int16(), 'NIR1', -32768);
-  exportFunc(composite.select('nir2').int16(), 'NIR2', -32768);
-  exportFunc(composite.select('swir1').int16(), 'SWIR1', -32768);
-  exportFunc(composite.select('swir2').int16(), 'SWIR2', -32768);
-  exportFunc(composite.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', -32768);
-  exportFunc(composite.select('ARVI2').multiply(10000).int16(), 'ARVI2', -32768);
-  exportFunc(composite.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', -32768);
-  exportFunc(composite.select('CIgreen').multiply(1000).int16(), 'CIgreen', -32768);
-  exportFunc(composite.select('CVI').multiply(1000).int16(), 'CVI', -32768);
-  exportFunc(composite.select('CI').multiply(10000).int16(), 'CI', -32768);
-  exportFunc(composite.select('NDVI').multiply(10000).int16(), 'NDVI', -32768);
-  exportFunc(composite.select('CTVI').multiply(1000).int16(), 'CTVI', -32768);
-  exportFunc(composite.select('GDVI').multiply(10).int16(), 'GDVI', -32768);
-  exportFunc(composite.select('EVI').multiply(10000).int16(), 'EVI', -32768);
-  exportFunc(composite.select('EVI2').multiply(10000).int16(), 'EVI2', -32768);
-  exportFunc(composite.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
-  exportFunc(composite.select('GVMI').multiply(10000).int16(), 'GVMI', -32768);
-  exportFunc(composite.select('GARI').multiply(10000).int16(), 'GARI', -32768);
-  exportFunc(composite.select('GLI').multiply(10000).int16(), 'GLI', -32768);
-  exportFunc(composite.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', -32768);
-  exportFunc(composite.select('GSAVI').multiply(10000).int16(), 'GSAVI', -32768);
-  exportFunc(composite.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', -32768);
-  exportFunc(composite.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', -32768);
-  exportFunc(composite.select('HUE').multiply(10000).int16(), 'HUE', -32768);
-  exportFunc(composite.select('IPVI').multiply(10000).int16(), 'IPVI', -32768);
-  exportFunc(composite.select('INTENSITY').multiply(100).int16(), 'INTENSITY', -32768);
-  exportFunc(composite.select('LogR').multiply(10000).int16(), 'LogR', -32768);
-  exportFunc(composite.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', -32768);
-  exportFunc(composite.select('MSAVI').multiply(10000).int16(), 'MSAVI', -32768);
-  exportFunc(composite.select('NormG').multiply(10000).int16(), 'NormG', -32768);
-  exportFunc(composite.select('NormNIR').multiply(10000).int16(), 'NormNIR', -32768);
-  exportFunc(composite.select('NormR').multiply(10000).int16(), 'NormR', -32768);
-  exportFunc(composite.select('IBI').multiply(10000).int16(), 'IBI', -32768);
-  exportFunc(composite.select('PNDVI').multiply(10000).int16(), 'PNDVI', -32768);
-  exportFunc(composite.select('SHIdx').multiply(10000).int16(), 'SHIdx', -32768);
-  exportFunc(composite.select('GRVI').multiply(10000).int16(), 'GRVI', -32768);
-  exportFunc(composite.select('DVI').multiply(10000).int16(), 'DVI', -32768);
-  exportFunc(composite.select('FeOX').multiply(10000).int16(), 'FeOX', -32768);
-  exportFunc(composite.select('RGR').multiply(10000).int16(), 'RGR', -32768);
-  exportFunc(composite.select('RRNIR').multiply(10000).int16(), 'RRNIR', -32768);
-  exportFunc(composite.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', -32768);
-  exportFunc(composite.select('FerMin').multiply(10000).int16(), 'FerMin', -32768);
-  exportFunc(composite.select('ClayMin').multiply(10000).int16(), 'ClayMin', -32768);
-  exportFunc(composite.select('SAVI').multiply(10000).int16(), 'SAVI', -32768);
-  exportFunc(composite.select('SATVI').multiply(100).int16(), 'SATVI', -32768);
-  exportFunc(composite.select('SARVI2').multiply(10000).int16(), 'SARVI2', -32768);
-  exportFunc(composite.select('SLAVI').multiply(10000).int16(), 'SLAVI', -32768);
-  exportFunc(composite.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', -32768);
-  exportFunc(composite.select('TNDVI').multiply(10000).int16(), 'TNDVI', -32768);
-  exportFunc(composite.select('TVI').multiply(10000).int16(), 'TVI', -32768);
-  exportFunc(composite.select('WDRVI').multiply(10000).int16(), 'WDRVI', -32768);
-  exportFunc(composite.select('NDbg').multiply(10000).int16(), 'NDbg', -32768);
-  exportFunc(composite.select('NDbr').multiply(10000).int16(), 'NDbr', -32768);
-  exportFunc(composite.select('NDbnir').multiply(10000).int16(), 'NDbnir', -32768);
-  exportFunc(composite.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', -32768);
-  exportFunc(composite.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', -32768);
-  exportFunc(composite.select('NDrb').multiply(10000).int16(), 'NDrb', -32768);
-  exportFunc(composite.select('NDrg').multiply(10000).int16(), 'NDrg', -32768);
-  exportFunc(composite.select('NDrnir').multiply(10000).int16(), 'NDrnir', -32768);
-  exportFunc(composite.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', -32768);
-  exportFunc(composite.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', -32768);
-  exportFunc(composite.select('NDgb').multiply(10000).int16(), 'NDgb', -32768);
-  exportFunc(composite.select('NDgr').multiply(10000).int16(), 'NDgr', -32768);
-  exportFunc(composite.select('NDgnir').multiply(10000).int16(), 'NDgnir', -32768);
-  exportFunc(composite.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', -32768);
-  exportFunc(composite.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', -32768);
-  exportFunc(composite.select('NDnirb').multiply(10000).int16(), 'NDnirb', -32768);
-  exportFunc(composite.select('NDnirg').multiply(10000).int16(), 'NDnirg', -32768);
-  exportFunc(composite.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', -32768);
-  exportFunc(composite.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', -32768);
-  exportFunc(composite.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', -32768);
-  exportFunc(composite.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', -32768);
-  exportFunc(composite.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', -32768);
-  exportFunc(composite.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', -32768);
-  exportFunc(composite.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', -32768);
-  exportFunc(composite.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', -32768);
-  exportFunc(composite.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', -32768);
-  exportFunc(composite.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', -32768);
-  exportFunc(composite.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', -32768);
-  exportFunc(composite.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', -32768);
-  exportFunc(composite.select('PC1').multiply(10000).int16(), 'PC1', -32768);
-  exportFunc(composite.select('PC2').multiply(10000).int16(), 'PC2', -32768);
-  exportFunc(composite.select('PC3').multiply(10000).int16(), 'PC3', -32768);
-  exportFunc(composite.select('PC4').multiply(10000).int16(), 'PC4', -32768);
-  exportFunc(composite.select('PC5').multiply(10000).int16(), 'PC5', -32768);
-  exportFunc(composite.select('PC6').multiply(10000).int16(), 'PC6', -32768);
-  exportFunc(composite.select('PC7').multiply(10000).int16(), 'PC7', -32768);
-  exportFunc(composite.select('PC8').multiply(10000).int16(), 'PC8', -32768);
-  exportFunc(composite.select('PC9').multiply(10000).int16(), 'PC9', -32768);
-  exportFunc(composite.select('PC10').multiply(10000).int16(), 'PC10', -32768);
+  exportFunc(unmaskedImage.select('blue').int16(), 'Blue', noDataVal);
+  exportFunc(unmaskedImage.select('green').int16(), 'Green', noDataVal);
+  exportFunc(unmaskedImage.select('red').int16(), 'Red', noDataVal);
+  exportFunc(unmaskedImage.select('re1').int16(), 'RE1', noDataVal);
+  exportFunc(unmaskedImage.select('re2').int16(), 'RE2', noDataVal);
+  exportFunc(unmaskedImage.select('re3').int16(), 'RE3', noDataVal);
+  exportFunc(unmaskedImage.select('nir').int16(), 'NIR1', noDataVal);
+  exportFunc(unmaskedImage.select('nir2').int16(), 'NIR2', noDataVal);
+  exportFunc(unmaskedImage.select('swir1').int16(), 'SWIR1', noDataVal);
+  exportFunc(unmaskedImage.select('swir2').int16(), 'SWIR2', noDataVal);
+  exportFunc(unmaskedImage.select('ATSAVI').multiply(10000).int16(), 'ATSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('ARVI2').multiply(10000).int16(), 'ARVI2', noDataVal);
+  exportFunc(unmaskedImage.select('BWDRVI').multiply(10000).int16(), 'BWDRVI', noDataVal);
+  exportFunc(unmaskedImage.select('CIgreen').multiply(1000).int16(), 'CIgreen', noDataVal);
+  exportFunc(unmaskedImage.select('CVI').multiply(1000).int16(), 'CVI', noDataVal);
+  exportFunc(unmaskedImage.select('CI').multiply(10000).int16(), 'CI', noDataVal);
+  exportFunc(unmaskedImage.select('NDVI').multiply(10000).int16(), 'NDVI', noDataVal);
+  exportFunc(unmaskedImage.select('CTVI').multiply(1000).int16(), 'CTVI', noDataVal);
+  exportFunc(unmaskedImage.select('GDVI').multiply(10).int16(), 'GDVI', noDataVal);
+  exportFunc(unmaskedImage.select('EVI').multiply(10000).int16(), 'EVI', noDataVal);
+  exportFunc(unmaskedImage.select('EVI2').multiply(10000).int16(), 'EVI2', noDataVal);
+  exportFunc(unmaskedImage.select('EVI22').multiply(10000).int16(), 'EVI22', 32768);
+  exportFunc(unmaskedImage.select('GVMI').multiply(10000).int16(), 'GVMI', noDataVal);
+  exportFunc(unmaskedImage.select('GARI').multiply(10000).int16(), 'GARI', noDataVal);
+  exportFunc(unmaskedImage.select('GLI').multiply(10000).int16(), 'GLI', noDataVal);
+  exportFunc(unmaskedImage.select('GOSAVI').multiply(10000).int16(), 'GOSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('GSAVI').multiply(10000).int16(), 'GSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('GBNDVI').multiply(10000).int16(), 'GBNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('GRNDVI').multiply(10000).int16(), 'GRNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('HUE').multiply(10000).int16(), 'HUE', noDataVal);
+  exportFunc(unmaskedImage.select('IPVI').multiply(10000).int16(), 'IPVI', noDataVal);
+  exportFunc(unmaskedImage.select('INTENSITY').multiply(100).int16(), 'INTENSITY', noDataVal);
+  exportFunc(unmaskedImage.select('LogR').multiply(10000).int16(), 'LogR', noDataVal);
+  exportFunc(unmaskedImage.select('MSRnirRed').multiply(10000).int16(), 'MSRnirRed', noDataVal);
+  exportFunc(unmaskedImage.select('MSAVI').multiply(10000).int16(), 'MSAVI', noDataVal);
+  exportFunc(unmaskedImage.select('NormG').multiply(10000).int16(), 'NormG', noDataVal);
+  exportFunc(unmaskedImage.select('NormNIR').multiply(10000).int16(), 'NormNIR', noDataVal);
+  exportFunc(unmaskedImage.select('NormR').multiply(10000).int16(), 'NormR', noDataVal);
+  exportFunc(unmaskedImage.select('IBI').multiply(10000).int16(), 'IBI', noDataVal);
+  exportFunc(unmaskedImage.select('PNDVI').multiply(10000).int16(), 'PNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('SHIdx').multiply(10000).int16(), 'SHIdx', noDataVal);
+  exportFunc(unmaskedImage.select('GRVI').multiply(10000).int16(), 'GRVI', noDataVal);
+  exportFunc(unmaskedImage.select('DVI').multiply(10000).int16(), 'DVI', noDataVal);
+  exportFunc(unmaskedImage.select('FeOX').multiply(10000).int16(), 'FeOX', noDataVal);
+  exportFunc(unmaskedImage.select('RGR').multiply(10000).int16(), 'RGR', noDataVal);
+  exportFunc(unmaskedImage.select('RRNIR').multiply(10000).int16(), 'RRNIR', noDataVal);
+  exportFunc(unmaskedImage.select('RRSWIR').multiply(10000).int16(), 'RRSWIR', noDataVal);
+  exportFunc(unmaskedImage.select('FerMin').multiply(10000).int16(), 'FerMin', noDataVal);
+  exportFunc(unmaskedImage.select('ClayMin').multiply(10000).int16(), 'ClayMin', noDataVal);
+  exportFunc(unmaskedImage.select('SAVI').multiply(10000).int16(), 'SAVI', noDataVal);
+  exportFunc(unmaskedImage.select('SATVI').multiply(100).int16(), 'SATVI', noDataVal);
+  exportFunc(unmaskedImage.select('SARVI2').multiply(10000).int16(), 'SARVI2', noDataVal);
+  exportFunc(unmaskedImage.select('SLAVI').multiply(10000).int16(), 'SLAVI', noDataVal);
+  exportFunc(unmaskedImage.select('SqrtIrR').multiply(10000).int16(), 'SqrtIrR', noDataVal);
+  exportFunc(unmaskedImage.select('TNDVI').multiply(10000).int16(), 'TNDVI', noDataVal);
+  exportFunc(unmaskedImage.select('TVI').multiply(10000).int16(), 'TVI', noDataVal);
+  exportFunc(unmaskedImage.select('WDRVI').multiply(10000).int16(), 'WDRVI', noDataVal);
+  exportFunc(unmaskedImage.select('NDbg').multiply(10000).int16(), 'NDbg', noDataVal);
+  exportFunc(unmaskedImage.select('NDbr').multiply(10000).int16(), 'NDbr', noDataVal);
+  exportFunc(unmaskedImage.select('NDbnir').multiply(10000).int16(), 'NDbnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDbswir1').multiply(10000).int16(), 'NDbswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDbswir2').multiply(10000).int16(), 'NDbswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDrb').multiply(10000).int16(), 'NDrb', noDataVal);
+  exportFunc(unmaskedImage.select('NDrg').multiply(10000).int16(), 'NDrg', noDataVal);
+  exportFunc(unmaskedImage.select('NDrnir').multiply(10000).int16(), 'NDrnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDrswir1').multiply(10000).int16(), 'NDrswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDrswir2').multiply(10000).int16(), 'NDrswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDgb').multiply(10000).int16(), 'NDgb', noDataVal);
+  exportFunc(unmaskedImage.select('NDgr').multiply(10000).int16(), 'NDgr', noDataVal);
+  exportFunc(unmaskedImage.select('NDgnir').multiply(10000).int16(), 'NDgnir', noDataVal);
+  exportFunc(unmaskedImage.select('NDgswir1').multiply(10000).int16(), 'NDgswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDgswir2').multiply(10000).int16(), 'NDgswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirb').multiply(10000).int16(), 'NDnirb', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirg').multiply(10000).int16(), 'NDnirg', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirswir1').multiply(10000).int16(), 'NDnirswir1', noDataVal);
+  exportFunc(unmaskedImage.select('NDnirswir2').multiply(10000).int16(), 'NDnirswir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1b').multiply(10000).int16(), 'NDswir1b', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1r').multiply(10000).int16(), 'NDswir1r', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1g').multiply(10000).int16(), 'NDswir1g', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1nir').multiply(10000).int16(), 'NDswir1nir', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir1swir2').multiply(10000).int16(), 'NDswir1swir2', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2b').multiply(10000).int16(), 'NDswir2b', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2r').multiply(10000).int16(), 'NDswir2r', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2g').multiply(10000).int16(), 'NDswir2g', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2nir').multiply(10000).int16(), 'NDswir2nir', noDataVal);
+  exportFunc(unmaskedImage.select('NDswir2swir1').multiply(10000).int16(), 'NDswir2swir1', noDataVal);
+  exportFunc(unmaskedImage.select('PC1').multiply(10000).int16(), 'PC1', noDataVal);
+  exportFunc(unmaskedImage.select('PC2').multiply(10000).int16(), 'PC2', noDataVal);
+  exportFunc(unmaskedImage.select('PC3').multiply(10000).int16(), 'PC3', noDataVal);
+  exportFunc(unmaskedImage.select('PC4').multiply(10000).int16(), 'PC4', noDataVal);
+  exportFunc(unmaskedImage.select('PC5').multiply(10000).int16(), 'PC5', noDataVal);
+  exportFunc(unmaskedImage.select('PC6').multiply(10000).int16(), 'PC6', noDataVal);
+  exportFunc(unmaskedImage.select('PC7').multiply(10000).int16(), 'PC7', noDataVal);
+  exportFunc(unmaskedImage.select('PC8').multiply(10000).int16(), 'PC8', noDataVal);
+  exportFunc(unmaskedImage.select('PC9').multiply(10000).int16(), 'PC9', noDataVal);
+  exportFunc(unmaskedImage.select('PC10').multiply(10000).int16(), 'PC10', noDataVal);
 }
 
 
@@ -905,24 +930,23 @@ if(isSen2==false){
 //copy and paste function calls into console hit enter after they have been pasted into the console
 
 // runTaskList function
+function runTaskList(){
+    $$('.run-button' ,$$('ee-task-pane')[0].shadowRoot).forEach(function(e) {
+         e.click();
+    })
+}
 
-//function runTaskList(){
-//    $$('.run-button' ,$$('ee-task-pane')[0].shadowRoot).forEach(function(e) {
-//         e.click();
-//    })
-//}
+ //confirmAll function - click okay after the run button.
 
-// confirmAll function - click okay after the run button.
+function confirmAll() {
+    $$('ee-table-config-dialog, ee-image-config-dialog').forEach(function(e) {
+         var eeDialog = $$('ee-dialog', e.shadowRoot)[0]
+         var paperDialog = $$('paper-dialog', eeDialog.shadowRoot)[0]
+         $$('.ok-button', paperDialog)[0].click()
+    })
+}
 
-//function confirmAll() {
-//    $$('ee-table-config-dialog, ee-image-config-dialog').forEach(function(e) {
-//         var eeDialog = $$('ee-dialog', e.shadowRoot)[0]
-//         var paperDialog = $$('paper-dialog', eeDialog.shadowRoot)[0]
-//         $$('.ok-button', paperDialog)[0].click()
-//    })
-//}
-
-// to run the functions enter the following into the console:
+ //to run the functions enter the following into the console:
 //runTaskList();
 //confirmAll();
 
