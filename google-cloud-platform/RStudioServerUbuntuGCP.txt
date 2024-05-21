@@ -48,22 +48,33 @@ Enter the following into the terminal:
 	sudo apt -y install r-base r-base-dev
 
 	4. Install reauired dependencies for tidyverse
-	sudo apt-get install libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev
+	sudo apt-get install libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev -y
 
 	5. Install reauired dependencies for spatial libraries
 	sudo apt-get install libudunits2-dev libgdal-dev libgeos-dev libproj-dev libmysqlclient-dev libjq-dev libprotobuf-dev protobuf-compiler -y
 
-	6. Install RStudio Server
+	6. download RStudio Server
 	wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.06.2-561-amd64.deb
-	sudo gdebi rstudio-server-2023.06.2-561-amd64.deb
+	
+	7. Install RStudio Server
+	sudo gdebi rstudio-server-2023.06.2-561-amd64.deb -y
 
-	7. Create a new user and password
-	sudo adduser master
-	New password: master
-	Retype new password: master
-	Press ENTER for default on all other values
+	8. Create a password or set up a new user
+	Get user name
+		whoami
 
-	8. Reboot
+	Set password
+		sudo passwd user_name
+		new password: type in password
+		retype new password: type in password
+
+	Add another user to log in
+		sudo adduser new_user_name
+		New password: type inpassword
+		Retype new password: type in password
+		Press ENTER for default on all other values
+
+	9. Reboot
 	sudo reboot
 
  EXIT the SSH in browser
@@ -107,10 +118,10 @@ Open a terminal by selecting SSH on the VM you created
 Enter the following into the terminal (be sure to put the copied name of the bucket where it says name-of-bucket):
 
 	1. get the uid (enter your username where it says master)
-	id -u master
+	id -u user_name
 
 	2. get the gid (enter your username where is says master)
-	id - g master
+	id -g user_name
 
 	3. create directories
 	sudo mkdir -p /home/user_name/name-of-bucket
@@ -123,7 +134,7 @@ Enter the following into the terminal (be sure to put the copied name of the buc
 	sudo nano /etc/fstab
 
 	#paste these into the editor on new lines (enter the uid and gid from steps 1 and 2 above)
-	name-of-bucket /home/user_name/name-of-bucket gcsfuse rw,_netdev,allow_other,uid=1002,gid=1003,file_mode=0776,dir_mode=0776
+	name-of-bucket /home/user_name/name-of-bucket gcsfuse rw,_netdev,allow_other,uid=1001,gid=1002,file_mode=0776,dir_mode=0776
 	
 	6. ctrl o will write to the file, then press enter, then ctrl x to exit
 
