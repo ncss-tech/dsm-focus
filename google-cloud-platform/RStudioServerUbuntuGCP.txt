@@ -44,16 +44,27 @@ Enter the following into the terminal:
 	2. Install required dependencies
 	sudo apt-get install gdebi-core
 	
-	3. Install base R
-	sudo apt -y install r-base r-base-dev
+	3. Install R for Ubuntu
+	# set new ubuntu repositiories for r 4.2
+	sudo apt install -y --no-install-recommends software-properties-common dirmngr
+	# Add the keys
+	wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+	# add the R 4.0 repo from CRAN -- adjust 'focal' to 'groovy' or 'bionic' as needed
+	sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+	# Install R 4.2
+	sudo apt install -y r-base r-base-core r-recommended r-base-dev
 
 	4. Install reauired dependencies for tidyverse
 	sudo apt-get install libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev -y
 
 	5. Install reauired dependencies for spatial libraries
-	sudo apt-get install libudunits2-dev libgdal-dev libgeos-dev libproj-dev libmysqlclient-dev libjq-dev libprotobuf-dev protobuf-compiler -y
+	sudo apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev libmysqlclient-dev libjq-dev libprotobuf-dev protobuf-compiler libv8-dev libnode-dev libcairo2-dev libnetcdf-dev
 
+	6. Update packages 
+	update.packages(ask = FALSE, checkBuilt = TRUE)
+	
 	6. download RStudio Server
+	(make sure to get the correct version for your cpu platform and linux distro versiion - https://posit.co/download/rstudio-server/)
 	wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.06.2-561-amd64.deb
 	
 	7. Install RStudio Server
