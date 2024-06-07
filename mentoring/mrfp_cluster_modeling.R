@@ -65,6 +65,8 @@ fp_aoi <- fp[idx_fp]
 
 
 # transform ----
+
+# fix horizon error
 h2 <- horizons(fp_aoi)
 h2$hzdept[h2$peiid == "1431954" & h2$hzdept == 19] <- 17
 horizons(fp_aoi) <- h2
@@ -111,13 +113,17 @@ h_t <- h |>
     depthcols = c("hzdept", "hzdepb"), 
     trim = TRUE) |>
   subset(select = c(peiid, hzdept, hzdepb))
-  
+
+psc_lu <- lookup_PSCS()
+
 test2 <- hz_to_taxpartsize(h, h_t, idcol = "peiid", depthcols = c("hzdept", "hzdepb"), clay = "clay2", taxpartsize = "taxpartsize") |>
   within({
-    taxpartsize = factor(taxpartsize, levels = PSCS_levels(), ordered = FALSE) |> droplevels()
+    taxpartsize = factor(taxpartsize, levels = levels(lookup_PSCS()$taxpartsize), ordered = FALSE)
+    taxpartsize_rank = psc_lu$rank[taxpartsize]
+    taxpartsize = droplevels(taxpartsize)
   })
 
-test2$taxpartsize |> factor(levels = PSCS_levels()) |> droplevels() |> table()
+test2$taxpartsize |> table()
 merge(site(fp_aoi)[c("peiid", "taxpartsize")], test2, by = "peiid") |> 
   View()
 
@@ -145,6 +151,8 @@ s2 <- within(s, {
   drainage[is.na(drainage)] = "udic"
   drainage = factor(drainage, levels = c("aquic", "oxyaquic", "aeric", "udic"), ordered = TRUE)
   
+  drainage_rank = c(25, 62, 75, 125)[as.integer(drainage)]
+  
   fluv   = ifelse(grepl("fluv", taxsubgrp), TRUE, FALSE)
   mollic = ifelse(grepl("mollic|olls", taxsubgrp), TRUE, FALSE)
 })
@@ -152,7 +160,7 @@ s2 <- within(s, {
 
 
 ## combine results ----
-vars <- c("peiid", "drainage", "fluv", "mollic")
+vars <- c("peiid", "drainage", "drainage_rank", "fluv", "mollic")
 s2 <- merge(s2[vars], test2, by = "peiid", all.x = TRUE, sort = FALSE) |>
   merge(h_sand[c("peiid", "sand_thk")], by = "peiid", all.x = TRUE, sort = FALSE) |>
   merge(s[c("peiid", "taxsubgrp", names(rs))], by = "peiid", all.y = TRUE, sort = FALSE)
@@ -161,7 +169,7 @@ s2 <- merge(s2[vars], test2, by = "peiid", all.x = TRUE, sort = FALSE) |>
 so <- s2
 row.names(so) <- paste(so$peiid, so$taxonname)
 
-vars <- c("drainage", "taxpartsize", "sand_thk", "mollic", "fluv")
+vars <- c("drainage", "drainage_rank", "taxpartsize", "taxpartsize_rank", "sand_thk", "mollic", "fluv")
 rs_vars <- names(rs)
 so <- so[c(vars, rs_vars)]
 so <- so[complete.cases(so), ]
@@ -199,6 +207,8 @@ ggplot(so, aes(dem_diff, sand_thk, col = sand_thk > 100)) +
 
 
 # Correlate ----
+psc_lu <- lookup_PSCS()
+
 so <- so |>
   within({
     cor_psc = as.character(taxpartsize)
@@ -222,8 +232,9 @@ so <- so |>
       "fine-silty over sandy or sandy-skeletal",
       cor_psc
     )
-    cor_psc = factor(cor_psc, levels = levels(PSCS_levels()), ordered = TRUE) |> 
-      droplevels()
+    cor_psc = factor(cor_psc, levels = levels(psc_lu$taxpartsize), ordered = TRUE)
+    cor_psc_rank = psc_lu$rank[as.integer(cor_psc)]
+    cor_psc = droplevels(cor_psc)
   })
 table(so$cor_psc, so$drainage)
 
@@ -232,7 +243,7 @@ table(so$cor_psc, so$drainage)
 # Cluster ----
 library(ClustGeo)
 
-vars <- c("drainage", "cor_psc", "sand_thk", "mollic", "fluv")
+vars <- c("drainage_rank", "cor_psc_rank", "sand_thk", "mollic", "fluv")
 so_dm <- cluster::daisy(
   so[vars], 
   metric = "gower", 
@@ -249,7 +260,7 @@ D1 <- as.dist(as.matrix(pred_dm))
 
 a <- lapply(2:10, function(i) choicealpha(D0, D1, range.alpha = seq(0, 1, 0.1), K = i))
 
-test <- hclustgeo(D0, D1, alpha = 0.8)
+test <- hclustgeo(D0, D1, alpha = 0.7)
 
 clus <- lapply(2:10, function(i) data.frame(as.factor(cutree(test, i))))
 clus <- do.call("cbind", clus)
@@ -263,6 +274,7 @@ clus_lab <- paste0("n", 2:10)
 
 # reverse engineer clusters ----
 ## compute cluster centers ----
+vars <- c("drainage", "taxpartsize", "sand_thk", "mollic", "fluv")
 clus_centers <- lapply(clus_lab, function(x) {
   
   dat <- so2[vars]
