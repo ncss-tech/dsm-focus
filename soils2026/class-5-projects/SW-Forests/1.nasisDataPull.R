@@ -64,3 +64,58 @@ write.csv(siteNames.df, file="pedOffAb")
 
 
 ########
+
+#1.nasisDataPull.R 
+#workflow for gathering  USFS pedon data from nasis to create esri shapefiles
+# 05/30/24
+# dave white
+
+
+# nasis data pull for FS pedons
+
+# run query: '40MIS USFS NRM PEDONS by national forest area'
+# to load pedons into selected set
+# run each of the following 
+
+#RO3% 
+# this is the southwest forest region
+
+#________________________________
+
+
+# R script to generate shapefile of pedons owned by offices
+
+# Load Libraries
+library(aqp)
+library(soilDB)
+library(sf)
+
+# load soils data into soil profile collection
+spc <- fetchNASIS()
+
+# get the site table from the soil profile collection and name it site
+site.df <- site(spc)
+# inspect the attribute names
+names(site)
+
+
+site.df <- site.df[complete.cases(site.df$x_std),]
+site.df <- site.df[complete.cases(site.df$y_std),]
+
+site.pts <- st_as_sf(site.df, 
+                     coords = c('x_std','y_std'),
+                     crs = st_crs(4326))
+
+setwd("D:/soils_2026/S2026class5projects/SW2026USFSlands/pedons")
+st_write(site.pts, "pedFS.shp")
+
+
+
+
+
+
+
+
+
+
+
