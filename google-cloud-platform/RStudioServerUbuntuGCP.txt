@@ -175,3 +175,6 @@ Copy the external IP to the clipboard
 Open a new browser tab
 Paste the ip address into the browser followed by :8787 it should look like the following: 11.111.111.111:8787
 Log in using your username and password
+
+=======================================================================================================================
+5. connect rstudio server to github :https://www.geeksforgeeks.org/link-your-github-account-with-r-studio/
