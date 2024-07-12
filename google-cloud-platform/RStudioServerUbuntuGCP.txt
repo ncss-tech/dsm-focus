@@ -44,9 +44,12 @@ Enter the following into the terminal:
 	2. Install required dependencies
 	# to install deb
 	sudo apt-get install gdebi-core
-	# to install packages in rstudio
+	# to install packages in rstudio you may need a compiler
+	sudo apt install gcc
 	sudo apt-get install build-essential
-	
+	# some packagages need fortran to compile
+	sudo apt-get install gfortran
+
 	3. Install R for Ubuntu
 	Follow guidance here: https://cloud.r-project.org/bin/linux/ubuntu/
 	
