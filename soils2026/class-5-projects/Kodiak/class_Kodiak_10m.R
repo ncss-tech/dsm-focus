@@ -5,7 +5,7 @@
 # load and install packages
 required.packages <- c( "caret", "sf", "terra", "randomForest", "doParallel", "aqp", "parallel", "snow", "foreign", "foreach")
 new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
+if(length(new.packages)) install.packages(new.packages, dependencies=F)
 lapply(required.packages, require, character.only=T)
 rm(required.packages, new.packages)
 
@@ -14,36 +14,24 @@ rm(required.packages, new.packages)
 # bring in covariate data and create a stack
 
 # set working directory to dem covs
-setwd("~/data/8-vic/cov30")
+setwd("~/data/cov10m")
 
 # read in raster file names as a list
 rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
 
 # create a raster stack of dem covs
-demStack <- rast(rList)
+rStack <- rast(rList)
 
-# set working directory to spectral covs
-setwd("~/data/8-vic/specCov30/clip")
-
-# read in raster file names as a list
-rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
-
-# create a raster stack of covs
-specStack <- rast(rList)
-
-# combine into one stack
-rStack <- c(demStack,specStack)
-
-rm(specStack, demStack, rList)
+rm(rList)
 
 # Bring in training data points 
 # read in shapefile 
 # bring in pedon data
 
 #set working directory to training data.
-setwd("~/data/8-vic/data")
+setwd("~/data")
 
-pts <- read_sf("pedons.shp")
+pts <- read_sf("trainData071224.shp")
 
 # extract raster covariate values at each training point for the all.pts dataset
 pts.sv <- terra::extract(rStack, pts, xy=F, bind=TRUE, na.rm=TRUE) 
@@ -54,7 +42,7 @@ all.pts <- sf::st_as_sf(pts.sv)
 names(all.pts)
 
 # remove unwanted cols
-all.pts <- all.pts[-c(1:14)]
+all.pts <- all.pts[-c(1:4)]
 colnames(all.pts)[1] <- "class"
 names(all.pts)
 all.pts$class <- as.factor(all.pts$class)
@@ -64,7 +52,7 @@ levels(all.pts$class)
 
 
 # convert sf to a dataframe
-pts.all <- as.data.frame(all.pts)[-c(172)]
+pts.all <- as.data.frame(all.pts)[-c(208)]
 names(pts.all)
 
 
@@ -97,7 +85,7 @@ gc()
 
 
 #subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,10,30,50,70,95,100,110,150,180)
+subsets <- c(1,10,30,50,70,95,100,110,150,210)
 
 # set seeds to get reproducible results when running the process in parallel
 set.seed(238)
@@ -116,7 +104,7 @@ ctrl.RFE <- rfeControl(functions = rfFuncs,
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
 detectCores()# number of cores
-cores <- 123
+cores <- 60
 cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
 registerDoParallel(cl)
 set.seed(9)
@@ -155,7 +143,7 @@ rfe
 #predictors(rf.RFE)[c(1:9,24:26)]
 
 # assign this to a variable
-a <- predictors(rfe)#[c(1:50)]
+a <- predictors(rfe)[c(1:50)]
 
 
 # subset the covariate stack and the data frame by the selected covariates the variable a is your selected covariates
@@ -236,7 +224,7 @@ rfm <- rfm$finalModel
 # make predictions
 
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/8-vic/data/tiles/")
+setwd("~/data/tiles/")
 
 
 #numTiles <- 11 # numTiles^2 should <= the number of cores - in this case I have 123 cores available and 11x11 would give 121 tiles
@@ -256,11 +244,11 @@ pred <- foreach(i = 1:length(tl),
                      }
 pred <- do.call(terra::merge,lapply(pred,terra::rast))
 plot(pred)
-setwd("~/data/8-vic/results")
+setwd("~/data/results")
 # write rasters
 writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
 # write raster attribute table
-#library(foreign)
+library(foreign)
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
 
