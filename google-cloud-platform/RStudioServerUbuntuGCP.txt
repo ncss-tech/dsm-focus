@@ -42,8 +42,10 @@ Enter the following into the terminal:
 	sudo apt-get update -y && sudo apt-get upgrade -y
 	
 	2. Install required dependencies
+	# to install deb
 	sudo apt-get install gdebi-core
-	
+	# to install packages in rstudio
+	sudo apt-get install build-essential
 	
 	3. Install R for Ubuntu
 	Follow guidance here: https://cloud.r-project.org/bin/linux/ubuntu/
@@ -173,3 +175,6 @@ Copy the external IP to the clipboard
 Open a new browser tab
 Paste the ip address into the browser followed by :8787 it should look like the following: 11.111.111.111:8787
 Log in using your username and password
+
+=======================================================================================================================
+5. connect rstudio server to github :https://www.geeksforgeeks.org/link-your-github-account-with-r-studio/
