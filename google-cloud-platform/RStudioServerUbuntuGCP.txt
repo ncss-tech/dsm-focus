@@ -42,8 +42,10 @@ Enter the following into the terminal:
 	sudo apt-get update -y && sudo apt-get upgrade -y
 	
 	2. Install required dependencies
+	# to install deb
 	sudo apt-get install gdebi-core
-	
+	# to install packages in rstudio
+	sudo apt-get install build-essential
 	
 	3. Install R for Ubuntu
 	Follow guidance here: https://cloud.r-project.org/bin/linux/ubuntu/
