@@ -234,7 +234,7 @@ x <- rast(ncol=numTiles, nrow=numTiles, extent=ext(rsm))
 
 tl <- makeTiles(rsm, x, overwrite=T, extend=T)
 
-cl <- parallel::makeCluster(length(tl))
+cl <- parallel::makeCluster(length(tl)-14)
 registerDoParallel(cl)
 
 pred <- foreach(i = 1:length(tl),
@@ -248,7 +248,7 @@ setwd("~/data/results")
 # write rasters
 writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
 # write raster attribute table
-library(foreign)
+#library(foreign)
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
 
