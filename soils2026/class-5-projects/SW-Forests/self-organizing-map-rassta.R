@@ -25,10 +25,10 @@ rSs <- scale(rStack)
 # self organizing map and gap statistic for optimum k
 set.seed(234)
 rSom <- som_gap(var.rast = rSs,
-               xdim = 12,
-               ydim = 12,
+               xdim = 8,
+               ydim = 8,
                #rlen = 150,
-               K.max = 60
+               K.max = 56
                )
 
 # optimum k
@@ -47,7 +47,7 @@ library(viridis)
 library(RColorBrewer)
 cols <- brewer.pal(64, "Paired")
 pal <- colorRampPalette(cols)
-plot(sompamRaster$SOM,
+plot(sompamRaster$SOMPAM,
      axes=FALSE,
      type="classes",
-     col=pal(64))
+     col=pal(8))
