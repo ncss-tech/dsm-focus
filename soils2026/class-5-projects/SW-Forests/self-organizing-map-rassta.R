@@ -13,7 +13,7 @@ twi <- rast("https://storage.googleapis.com/dw-sandbox-bucket/cov30/twi.tif")
 
 
 # create stack
-rStack <- c(elev, gmrph30, gmrph300, slp, swi, tri, twi)
+rStack <- c(elev, slp, swi, tri, twi)
 #rStack <- c(gmrph300, swi, tri, slp)
 # plot
 plot(rStack)
@@ -45,7 +45,7 @@ sompamRaster <- rPam$sompam.rast
 str(sompamRaster)
 library(viridis)
 library(RColorBrewer)
-cols <- brewer.pal(64, "Paired")
+cols <- brewer.pal(8, "Paired")
 pal <- colorRampPalette(cols)
 plot(sompamRaster$SOMPAM,
      axes=FALSE,
