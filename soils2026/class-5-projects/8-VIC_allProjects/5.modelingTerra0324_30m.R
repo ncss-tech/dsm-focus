@@ -1,9 +1,10 @@
 # 8-VIC modeling 10/16/23
 
 
-# 3/13/24  
+# 3/13/24
+# 8/26/24
 # Dave White
-
+start.time <- Sys.time()
 
 # load and install packages
 required.packages <- c( "caret", "sf", "terra", "randomForest", "doParallel", "aqp", "parallel", "snow", "foreign", "foreach")
@@ -206,14 +207,14 @@ registerDoParallel(cl)
 set.seed(48)
 rfm = train(x = comp.sub[,-c(1)],
             y = comp.sub$class,
-             "rf", 
-             trControl = fitControl, 
-             ntree = 500, #number of trees default is 500, which seems to work best anyway. 
-             tuneLength=10, 
-             metric = 'Kappa', 
-             na.action=na.pass,
-             keep.forest=TRUE, # added this line and the next for partial dependence plots
-             importance=TRUE)
+            "rf", 
+            trControl = fitControl, 
+            ntree = 500, #number of trees default is 500, which seems to work best anyway. 
+            tuneLength=10, 
+            metric = 'Kappa', 
+            na.action=na.pass,
+            keep.forest=TRUE, # added this line and the next for partial dependence plots
+            importance=TRUE)
 stopCluster(cl)
 gc()
 
@@ -253,10 +254,10 @@ cl <- parallel::makeCluster(length(tl))
 registerDoParallel(cl)
 
 pred <- foreach(i = 1:length(tl),
-                     .packages = c("terra", "randomForest")) %dopar% {
-                       pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T))
-                       return(pred)
-                     }
+                .packages = c("terra", "randomForest")) %dopar% {
+                  pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T))
+                  return(pred)
+                }
 pred <- do.call(terra::merge,lapply(pred,terra::rast))
 plot(pred)
 setwd("~/data/8-vic/results")
@@ -338,10 +339,10 @@ v <- vrt(rList, vrtfile)
 cl <- parallel::makeCluster(length(rList))
 registerDoParallel(cl)
 shan <- foreach(i = 1:length(rList),
-                    .packages = c("terra", "aqp")) %dopar% {
-                      shan <- wrap(aqp::shannonEntropy(terra::rast(rList[i])))
-                      return(shan)
-                    }
+                .packages = c("terra", "aqp")) %dopar% {
+                  shan <- wrap(aqp::shannonEntropy(terra::rast(rList[i])))
+                  return(shan)
+                }
 shan <- do.call(terra::merge,lapply(shan, terra::rast))
 plot(shan)
 
@@ -350,10 +351,10 @@ gc()
 #normalized shan entropy
 b <- length(names(v))
 shanNorm1 <- foreach(i = 1:3,
-                    .packages = c("terra", "aqp")) %dopar% {
-                      shanNorm1 <- wrap(aqp::shannonEntropy(terra::rast(rList[i]), b=b))
-                      return(shanNorm1)
-                    }
+                     .packages = c("terra", "aqp")) %dopar% {
+                       shanNorm1 <- wrap(aqp::shannonEntropy(terra::rast(rList[i]), b=b))
+                       return(shanNorm1)
+                     }
 shanNorm1 <- do.call(terra::merge,lapply(shanNorm1, terra::rast))
 shanNorm2 <- foreach(i = 4:6,
                      .packages = c("terra", "aqp")) %dopar% {
@@ -377,6 +378,10 @@ stopCluster(cl)
 cm <- confusionMatrix(rfm$predicted, rfm$y)
 cm$byClass
 
+end.time <- Sys.time()
 
+time.taken <- end.time - start.time
 
-save.image(file = "data032624.RData")
+time.taken
+saveRDS(time.taken, "timeTaken.rds")
+#save.image(file = "data032624.RData")
