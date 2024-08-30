@@ -233,6 +233,16 @@ rfm <- rfm$finalModel
 
 
 
+confusionMatrix(as.factor(rfm$predicted), as.factor(rfm$y))
+options(max.print=1000000)
+rfm
+
+#set working directory to save objects
+setwd("~/data")
+
+saveRDS(pts.sv, "pts.sv.rds")
+saveRDS(rfe, "rfe.rds")
+saveRDS(rfm, "rfm.rds")
 
 
 
