@@ -1,6 +1,7 @@
 # Updated Modeling Script for Kodiak Island
 # Dave White
 
+#8/28/24
 
 # load and install packages
 required.packages <- c( "caret", "sf", "terra", "randomForest", "doParallel", "aqp", "parallel", "snow", "foreign", "foreach")
@@ -14,7 +15,7 @@ rm(required.packages, new.packages)
 # bring in covariate data and create a stack
 
 # set working directory to dem covs
-setwd("~/data/cov10m")
+setwd("~/data/cov")
 
 # read in raster file names as a list
 rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
@@ -24,6 +25,13 @@ rStack <- rast(rList)
 
 rm(rList)
 
+names(rStack)
+
+#assign the names to the stack
+names(rStack) <- gsub(".tif", "", list.files(getwd(), pattern="tif$", full.names = FALSE))
+
+names(rStack)
+
 # Bring in training data points 
 # read in shapefile 
 # bring in pedon data
@@ -31,7 +39,7 @@ rm(rList)
 #set working directory to training data.
 setwd("~/data")
 
-pts <- read_sf("trainData071224.shp")
+pts <- read_sf("trainData082724.shp")
 
 # extract raster covariate values at each training point for the all.pts dataset
 pts.sv <- terra::extract(rStack, pts, xy=F, bind=TRUE, na.rm=TRUE) 
@@ -42,7 +50,7 @@ all.pts <- sf::st_as_sf(pts.sv)
 names(all.pts)
 
 # remove unwanted cols
-all.pts <- all.pts[-c(1:4)]
+all.pts <- all.pts[-c(1:6)]
 colnames(all.pts)[1] <- "class"
 names(all.pts)
 all.pts$class <- as.factor(all.pts$class)
@@ -65,6 +73,13 @@ is.factor(comp$class)
 levels(comp$class)
 summary((comp$class))
 
+### need to start the class with a letter
+comp$class <- as.factor(make.names(comp$class))
+levels(comp$class)
+
+
+
+
 # There are a few classes with < 2 observations remove those classes
 
 length(levels(comp$class))
@@ -85,7 +100,7 @@ gc()
 
 
 #subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,10,30,50,70,95,100,110,150,210)
+subsets <- c(1,10,30,50,70,100,150,210)
 
 # set seeds to get reproducible results when running the process in parallel
 set.seed(238)
@@ -96,9 +111,9 @@ seeds[[112]] <- sample.int(1000, 1)
 
 # set up the rfe control
 ctrl.RFE <- rfeControl(functions = rfFuncs,
-                       method = "repeatedcv",
-                       number = 10,
-                       repeats = 5,
+                       #method = "repeatedcv",
+                       #number = 10,
+                       #repeats = 5,
                        seeds = seeds, 
                        verbose = FALSE)
 
@@ -143,7 +158,7 @@ rfe
 #predictors(rf.RFE)[c(1:9,24:26)]
 
 # assign this to a variable
-a <- predictors(rfe)[c(1:50)]
+a <- predictors(rfe)#[c(1:50)]
 
 
 # subset the covariate stack and the data frame by the selected covariates the variable a is your selected covariates
@@ -174,10 +189,10 @@ seeds[[51]] <- sample.int(1000, 1)
 
 
 # set up the train control
-fitControl <- trainControl(method = "repeatedcv", 
-                           number = 10,
-                           repeats = 5,
-                           p = 0.8, #30% used for test set, 70% used for training set
+fitControl <- trainControl(#method = "repeatedcv", 
+                           #number = 10,
+                           #repeats = 5,
+                           p = 0.9, #30% used for test set, 70% used for training set
                            selectionFunction = 'best', 
                            classProbs = T,
                            savePredictions = T, 
@@ -228,13 +243,14 @@ setwd("~/data/tiles/")
 
 
 #numTiles <- 11 # numTiles^2 should <= the number of cores - in this case I have 123 cores available and 11x11 would give 121 tiles
-numTiles <- round(sqrt(cores), digits = 0)
+#numTiles <- round((detectCores()), digits = 0)
+numTiles <- 16
 
 x <- rast(ncol=numTiles, nrow=numTiles, extent=ext(rsm))
 
 tl <- makeTiles(rsm, x, overwrite=T, extend=T)
 
-cl <- parallel::makeCluster(length(tl)-14)
+cl <- parallel::makeCluster(64)
 registerDoParallel(cl)
 
 pred <- foreach(i = 1:length(tl),
@@ -250,7 +266,6 @@ writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEF
 # write raster attribute table
 #library(foreign)
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
-
 
 
 
