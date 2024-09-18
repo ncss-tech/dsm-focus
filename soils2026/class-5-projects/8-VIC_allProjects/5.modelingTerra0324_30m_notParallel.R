@@ -180,15 +180,15 @@ set.seed(12)
 
 
 # set up the train control
-fitControl <- trainControl(method = "repeatedcv", 
-                           number = 10,
-                           repeats = 5,
-                           p = 0.8, #30% used for test set, 70% used for training set
-                           selectionFunction = 'best', 
-                           classProbs = T,
-                           savePredictions = T, 
-                           returnResamp = 'final',
-                           search = "random")
+fitControl <- trainControl(#method = "repeatedcv", 
+  #number = 10,
+  #repeats = 5,
+  p = 0.8, #30% used for test set, 70% used for training set
+  selectionFunction = 'best', 
+  classProbs = T,
+  savePredictions = T, 
+  returnResamp = 'final',
+  search = "random")
 
 # Random Forest - Parallel process
 
@@ -232,11 +232,11 @@ rfm <- rfm$finalModel
 setwd("~/data/8-vic/results/917")
 
 # predict and writout class raster
-terra::predict(rast, rsm, rfm, na.rm=T, filename = "class.tif", overwrite=T, wopt=list(gdal=c("COMPRESS=DEFLATE", "TFW=YES", datatype='INT1U')))
+terra::predict(rsm, rfm, na.rm=T, filename = "class.tif", overwrite=T, wopt=list(gdal=c("COMPRESS=DEFLATE", "TFW=YES", datatype='INT1U')))
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
 # predict and writeout probability stack
-terra::predict(rast, rsm, rfm, na.rm=T, filename = "classProb.tif", type="prob", overwrite=T, wopt=list(gdal=c("COMPRESS=DEFLATE", "TFW=YES", datatype='INT1U')))
+terra::predict(rsm, rfm, na.rm=T, filename = "classProb.tif", type="prob", overwrite=T)
 
 gc()
 
