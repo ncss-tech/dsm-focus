@@ -101,28 +101,36 @@ gc()
 
 
 #subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,10,30,50,70,95,100,110,150,180)
+subsets <- c(1,50,75,100,150)
 
 # set seeds to get reproducible results when running the process in parallel
 set.seed(238)
+seeds <- vector(mode = "list", length=112)
+for(i in 1:111) seeds[[i]] <- sample.int(1000, length(subsets) + 1)
+seeds[[112]] <- sample.int(1000, 1)
 
 
 # set up the rfe control
 ctrl.RFE <- rfeControl(functions = rfFuncs,
                        method = "repeatedcv",
                        number = 10,
-                       repeats = 5, 
+                       repeats = 5,
+                       seeds = seeds, 
                        verbose = FALSE)
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
-
+detectCores()# number of cores
+cores <- detectCores()-5#123
+cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
+registerDoParallel(cl)
 set.seed(9)
 rfe <- rfe(x = comp[,-c(1)],
            y = comp$class,
            sizes = subsets,
-           rfeControl = ctrl.RFE
+           rfeControl = ctrl.RFE,
+           allowParallel = TRUE
 )
-
+stopCluster(cl)             
 gc()
 
 # Look at the results
@@ -176,22 +184,26 @@ subsets <- 161
 #subsets <- c(1,10, 25, 50, 100, 150, 161)
 # set seeds to get reproducable results when running the process in parallel
 set.seed(12)
-
+seeds <- vector(mode = "list", length=51)
+for(i in 1:50) seeds[[i]] <- sample.int(1000, length(1:subsets) + 1)
+seeds[[51]] <- sample.int(1000, 1)
 
 
 # set up the train control
-fitControl <- trainControl(#method = "repeatedcv", 
-  #number = 10,
-  #repeats = 5,
-  p = 0.8, #30% used for test set, 70% used for training set
-  selectionFunction = 'best', 
-  classProbs = T,
-  savePredictions = T, 
-  returnResamp = 'final',
-  search = "random")
+fitControl <- trainControl(method = "repeatedcv", 
+                           number = 10,
+                           repeats = 5,
+                           p = 0.8, #30% used for test set, 70% used for training set
+                           selectionFunction = 'best', 
+                           classProbs = T,
+                           savePredictions = T, 
+                           returnResamp = 'final',
+                           search = "random",
+                           seeds = seeds)
 
 # Random Forest - Parallel process
-
+cl <- makeCluster(cores)
+registerDoParallel(cl)
 set.seed(48)
 rfm = train(x = comp.sub[,-c(1)],
             y = comp.sub$class,
@@ -203,7 +215,7 @@ rfm = train(x = comp.sub[,-c(1)],
             na.action=na.pass,
             keep.forest=TRUE, # added this line and the next for partial dependence plots
             importance=TRUE)
-
+stopCluster(cl)
 gc()
 
 
@@ -217,39 +229,37 @@ rfm$results
 
 
 # Convert caret wrapper into randomforest model object for raster prediction
-rfm <- rfm$finalModel
+rfmfm <- rfm$finalModel
 
 
-
-
-
-
-
-# make predictions
 # make predictions
 
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/8-vic/results/917")
+setwd("~/data/8-vic/results/")
 
-# predict and writout class raster
-terra::predict(rsm, rfm, na.rm=T, filename = "class.tif", overwrite=T, wopt=list(gdal=c("COMPRESS=DEFLATE", "TFW=YES", datatype='INT1U')))
+
+
+pred <- terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T)
+
+plot(pred)
+
+
+
+setwd("~/data/8-vic/results/917/")
+# write rasters
+writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
+# write raster attribute table
+#library(foreign)
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
-# predict and writeout probability stack
-terra::predict(rsm, rfm, na.rm=T, filename = "classProb.tif", type="prob", overwrite=T)
+
+# predict probability stacks
+terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T, type="prob", filename="predProb.tif")
+
 
 gc()
 
-
-
-# get confusion matrix from model
-cm <- confusionMatrix(rfm$predicted, rfm$y)
-cm$byClass
-
 end.time <- Sys.time()
-
 time.taken <- end.time - start.time
-
 time.taken
 saveRDS(time.taken, "timeTaken.rds")
-
