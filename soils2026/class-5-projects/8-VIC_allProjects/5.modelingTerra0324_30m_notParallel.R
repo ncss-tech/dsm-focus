@@ -119,8 +119,8 @@ ctrl.RFE <- rfeControl(functions = rfFuncs,
                        verbose = FALSE)
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
-detectCores()# number of cores
-cores <- detectCores()-5#123
+##detectCores()-5# number of cores
+cores <- 123
 cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
 registerDoParallel(cl)
 set.seed(9)
@@ -235,7 +235,7 @@ rfmfm <- rfm$finalModel
 # make predictions
 
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/8-vic/results/")
+setwd("~/data/8-vic/results/917/")
 
 
 
