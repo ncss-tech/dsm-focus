@@ -73,7 +73,9 @@ names(pts.all)
 
 
 # remove any observations with NAs
-comp <- pts.all[complete.cases(pts.all),]
+#comp <- pts.all[complete.cases(pts.all),]
+
+comp <- pts.all
 
 # convert Class col to a factor
 #comp$Class <- as.factor(comp$Class)
