@@ -256,7 +256,7 @@ write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first par
 
 
 # predict probability stacks
-terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T, type="prob", filename="predProb.tif")
+terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T, type="prob", filename="predProb.tif", overwrite=T)
 
 
 gc()
