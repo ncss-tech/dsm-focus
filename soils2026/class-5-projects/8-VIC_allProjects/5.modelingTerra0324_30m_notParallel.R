@@ -73,7 +73,9 @@ names(pts.all)
 
 
 # remove any observations with NAs
-comp <- pts.all[complete.cases(pts.all),]
+#comp <- pts.all[complete.cases(pts.all),]
+
+comp <- pts.all
 
 # convert Class col to a factor
 #comp$Class <- as.factor(comp$Class)
@@ -101,7 +103,7 @@ gc()
 
 
 #subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,10,30,50,70,95,100,110,150,180)
+subsets <- c(1,50,75,100,150)
 
 # set seeds to get reproducible results when running the process in parallel
 set.seed(238)
@@ -119,7 +121,7 @@ ctrl.RFE <- rfeControl(functions = rfFuncs,
                        verbose = FALSE)
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
-detectCores()# number of cores
+##detectCores()-5# number of cores
 cores <- 123
 cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
 registerDoParallel(cl)
@@ -229,38 +231,23 @@ rfm$results
 
 
 # Convert caret wrapper into randomforest model object for raster prediction
-rfm <- rfm$finalModel
-
-
-
-
-
+rfmfm <- rfm$finalModel
 
 
 # make predictions
 
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/8-vic/data/tiles/")
+setwd("~/data/8-vic/results/917/")
 
 
-#numTiles <- 11 # numTiles^2 should <= the number of cores - in this case I have 123 cores available and 11x11 would give 121 tiles
-numTiles <- round(sqrt(cores), digits = 0)
 
-x <- rast(ncol=numTiles, nrow=numTiles, extent=ext(rsm))
+pred <- terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T)
 
-tl <- makeTiles(rsm, x, overwrite=T, extend=T)
-
-cl <- parallel::makeCluster(length(tl))
-registerDoParallel(cl)
-
-pred <- foreach(i = 1:length(tl),
-                .packages = c("terra", "randomForest")) %dopar% {
-                  pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T))
-                  return(pred)
-                }
-pred <- do.call(terra::merge,lapply(pred,terra::rast))
 plot(pred)
-setwd("~/data/8-vic/results")
+
+
+
+setwd("~/data/8-vic/results/917/")
 # write rasters
 writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
 # write raster attribute table
@@ -268,120 +255,13 @@ writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEF
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
 
+# predict probability stacks
+terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T, type="prob", filename="predProb.tif")
 
-
-# process probability stacks in smaller chunks
-setwd("~/data/8-vic/results/prob")
-length(tl)
-
-predProb <- foreach(i = 1:20, #1:lenght(tl)
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob1.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-predProb <- foreach(i = 21:40,
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob2.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-predProb <- foreach(i = 41:60,
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob3.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-predProb <- foreach(i = 61:80,
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob4.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-predProb <- foreach(i = 81:100,
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob5.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-predProb <- foreach(i = 101:121,
-                    .packages = c("terra", "randomForest")) %dopar% {
-                      pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T, type="prob"))
-                      return(pred)
-                    }
-predProb <- do.call(terra::merge,lapply(predProb,terra::rast))
-writeRaster(predProb, overwrite = TRUE, filename = "prob6.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-
-stopCluster(cl)
-
-rm(predProb)
 
 gc()
-
-
-
-#set directory to prob tiles
-setwd("~/data/8-vic/results/prob")
-
-# read in raster file names as a list
-rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
-
-vrtfile <- paste0(tempfile(), ".vrt")
-v <- vrt(rList, vrtfile)
-
-## shannon entropy keeps failing, maybe write prob rasters to disk then bring in as vrt and calc shan
-
-cl <- parallel::makeCluster(length(rList))
-registerDoParallel(cl)
-shan <- foreach(i = 1:length(rList),
-                .packages = c("terra", "aqp")) %dopar% {
-                  shan <- wrap(aqp::shannonEntropy(terra::rast(rList[i])))
-                  return(shan)
-                }
-shan <- do.call(terra::merge,lapply(shan, terra::rast))
-plot(shan)
-
-gc()
-
-#normalized shan entropy
-b <- length(names(v))
-shanNorm1 <- foreach(i = 1:3,
-                     .packages = c("terra", "aqp")) %dopar% {
-                       shanNorm1 <- wrap(aqp::shannonEntropy(terra::rast(rList[i]), b=b))
-                       return(shanNorm1)
-                     }
-shanNorm1 <- do.call(terra::merge,lapply(shanNorm1, terra::rast))
-shanNorm2 <- foreach(i = 4:6,
-                     .packages = c("terra", "aqp")) %dopar% {
-                       shanNorm2 <- wrap(aqp::shannonEntropy(terra::rast(rList[i]), b=b))
-                       return(shanNorm2)
-                     }
-shanNorm2 <- do.call(terra::merge,lapply(shanNorm2, terra::rast))
-
-shanNorm <- merge(shanNorm1, shanNorm2)
-
-
-plot(shanNorm)
-
-setwd("~/data/8-vic/results")
-writeRaster(shan, overwrite = TRUE, filename = "shan.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-writeRaster(shanNorm, overwrite = TRUE, filename = "shanNorm.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"))
-
-stopCluster(cl)
-
-# get confusion matrix from model
-cm <- confusionMatrix(rfm$predicted, rfm$y)
-cm$byClass
 
 end.time <- Sys.time()
-
 time.taken <- end.time - start.time
-
 time.taken
 saveRDS(time.taken, "timeTaken.rds")
-#save.image(file = "data032624.RData")
