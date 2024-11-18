@@ -1,13 +1,13 @@
-# 8-VIC modeling 10/16/23
+# 8-VIC modeling
 
 
-# 3/13/24
-# 8/26/24
+# 10/31/24
+
 # Dave White
 start.time <- Sys.time()
 
 # load and install packages
-required.packages <- c( "caret", "sf", "terra", "randomForest", "doParallel", "aqp", "parallel", "snow", "foreign", "foreach")
+required.packages <- c( "caret", "sf", "terra", "randomForest", "aqp", "foreign","doParallel", "parallel")
 new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
 lapply(required.packages, require, character.only=T)
@@ -18,27 +18,18 @@ rm(required.packages, new.packages)
 # bring in covariate data and create a stack
 
 # set working directory to dem covs
-setwd("~/data/8-vic/cov30")
+setwd("~/data/8-vic/cov")
 
 # read in raster file names as a list
 rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
 
 # create a raster stack of dem covs
-demStack <- rast(rList)
+rStack <- rast(rList)
+names(rStack) <- gsub(".tif", "",rList)
+names(rStack) <- gsub("-", "", names(rStack))
+names(rStack) <- gsub("_", "", names(rStack))
+names(rStack)
 
-# set working directory to spectral covs
-setwd("~/data/8-vic/specCov30/clip")
-
-# read in raster file names as a list
-rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
-
-# create a raster stack of covs
-specStack <- rast(rList)
-
-# combine into one stack
-rStack <- c(demStack,specStack)
-
-rm(specStack, demStack, rList)
 
 # Bring in training data points 
 # read in shapefile 
@@ -68,14 +59,16 @@ levels(all.pts$class)
 
 
 # convert sf to a dataframe
-pts.all <- as.data.frame(all.pts)[-c(172)]
+pts.all <- as.data.frame(all.pts)
 names(pts.all)
+
+comp <- pts.all[,!(colnames(pts.all)%in% c("geometry"))]
+names(comp)
+
 
 
 # remove any observations with NAs
-#comp <- pts.all[complete.cases(pts.all),]
-
-comp <- pts.all
+comp <- comp[complete.cases(comp),]
 
 # convert Class col to a factor
 #comp$Class <- as.factor(comp$Class)
@@ -85,47 +78,48 @@ summary((comp$class))
 
 # There are a few classes with < 2 observations remove those classes
 
-length(levels(comp$class))
+nlevels(comp$class)
+
+comp = droplevels(comp[comp$class %in% names(table(comp$class)) [table(comp$class) >2],])
 
 nlevels(comp$class)
 
-comp = comp[comp$class %in% names(table(comp$class)) [table(comp$class) >2],]
-levels(comp$class)
-summary(comp$class)
-comp <- droplevels(comp)
 levels(comp$class)
 summary(comp$class)
 
+
 length(levels(comp$class))
 gc()
+
 #---------------------------------------------------------------------------
 # Recursive Feature Selection (RFE)
 
 
-#subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,50,75,100,150)
+subsets <- seq(50, length(names(rStack)), 5)
+
+#set number and repeats for cross validation
+number = 10
+repeats = 1
 
 # set seeds to get reproducible results when running the process in parallel
-set.seed(238)
-seeds <- vector(mode = "list", length=112)
-for(i in 1:111) seeds[[i]] <- sample.int(1000, length(subsets) + 1)
-seeds[[112]] <- sample.int(1000, 1)
+set.seed(12)
+seeds <- vector(mode = "list", length=(number*repeats+1))
+for(i in 1:(number*repeats)) seeds[[i]] <- sample.int(1000, length(subsets)+1)
+seeds[[(number*repeats+1)]] <- sample.int(1000, 1)
 
+
+cl <- makeCluster(detectCores()-1) # base R only recognizes 128 cores and about 5 need to be left for OS
+registerDoParallel(cl)
 
 # set up the rfe control
 ctrl.RFE <- rfeControl(functions = rfFuncs,
                        method = "repeatedcv",
-                       number = 10,
-                       repeats = 5,
+                       number = number,
+                       repeats = repeats,
                        seeds = seeds, 
-                       verbose = FALSE)
+                       verbose = F)
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
-##detectCores()-5# number of cores
-cores <- 123
-cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
-registerDoParallel(cl)
-set.seed(9)
 rfe <- rfe(x = comp[,-c(1)],
            y = comp$class,
            sizes = subsets,
@@ -135,6 +129,7 @@ rfe <- rfe(x = comp[,-c(1)],
 stopCluster(cl)             
 gc()
 
+
 # Look at the results
 rfe
 plot(rfe)
@@ -143,9 +138,6 @@ plot(rfe)
 
 rfe$fit$confusion
 rfe$results
-plot(rfe) # default plot is for Accuracy, but it can also be changed to Kappa
-plot(rfe, metric="Kappa", main='RFE Kappa')
-plot(rfe, metric="Accuracy", main='RFE Accuracy')
 
 # see list of predictors
 predictors(rfe)
@@ -178,23 +170,25 @@ comp.sub <- (comp[,c("class", a)])
 names(comp.sub)
 is.factor(comp.sub$class)
 
-#
-# determine number of covariates
-#length(a)
 
-subsets <- 161
-#subsets <- c(1,10, 25, 50, 100, 150, 161)
-# set seeds to get reproducable results when running the process in parallel
+
+subsets <- seq(1, length(names(rsm)), 5)
+
+#set number and repeats for cross validation
+number = 10
+repeats = 5
+
+# set seeds to get reproducible results when running the process in parallel
 set.seed(12)
-seeds <- vector(mode = "list", length=51)
-for(i in 1:50) seeds[[i]] <- sample.int(1000, length(1:subsets) + 1)
-seeds[[51]] <- sample.int(1000, 1)
+seeds <- vector(mode = "list", length=(number*repeats+1))
+for(i in 1:(number*repeats)) seeds[[i]] <- sample.int(1000, length(subsets)+1)
+seeds[[(number*repeats+1)]] <- sample.int(1000, 1)
 
 
 # set up the train control
 fitControl <- trainControl(method = "repeatedcv", 
-                           number = 10,
-                           repeats = 5,
+                           number = number,
+                           repeats = repeats,
                            p = 0.8, #30% used for test set, 70% used for training set
                            selectionFunction = 'best', 
                            classProbs = T,
@@ -203,10 +197,9 @@ fitControl <- trainControl(method = "repeatedcv",
                            search = "random",
                            seeds = seeds)
 
-# Random Forest - Parallel process
-cl <- makeCluster(cores)
+cl <- makeCluster(detectCores()-1)
 registerDoParallel(cl)
-set.seed(48)
+# Random Forest - Parallel process
 rfm = train(x = comp.sub[,-c(1)],
             y = comp.sub$class,
             "rf", 
@@ -231,37 +224,57 @@ rfm$results
 
 
 # Convert caret wrapper into randomforest model object for raster prediction
-rfmfm <- rfm$finalModel
+rfm <- rfm$finalModel
 
 
 # make predictions
+terra::predict(rsm, rfm, wopt=list(steps=100), na.rm=T, overwrite = TRUE, filename = "~/data/8-vic/results/class.tif", gdal=c("TFW=YES"),datatype='INT1U')
 
-# set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/8-vic/results/917/")
+r <- rast("~/data/8-vic/results/class.tif")
+rat <- levels(r)[[1]]
+write.dbf(rat, file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 
-
-
-pred <- terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T)
-
-plot(pred)
-
-
-
-setwd("~/data/8-vic/results/917/")
-# write rasters
-writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
-# write raster attribute table
-#library(foreign)
-write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
+gc()
 
 
 # predict probability stacks
-terra::predict(rsm, rfm, wopt=list(steps=40), na.rm=T, type="prob", filename="predProb.tif", overwrite=T)
+terra::predict(rsm, rfm, wopt=list(steps=100), na.rm=T, type="prob", filename="~/data/8-vic/results/predProb.tif", overwrite=T)
 
 
 gc()
 
+
+
+# read in prob raster
+predProb <- rast("~/data/8-vic/results/predProb.tif")
+
+## shannon entropy keeps failing, maybe write prob rasters to disk then bring in as vrt and calc shan
+
+writeRaster(shannonEntropy(predProb), filename="~/data/8-vic/results/shan.tif", overwrite=T,gdal=c("TFW=YES", wopt=list(steps=100)))
+
+
+
+gc()
+
+#normalized shan entropy
+b <- length(names(predProb))
+
+writeRaster((shannonEntropy(predProb, b=b)), filename="~/data/8-vic/results/shanNorm.tif", overwrite=T,gdal=c("TFW=YES", wopt=list(steps=100)))
+
+
+
+# get confusion matrix from model
+cm <- confusionMatrix(rfm$predicted, rfm$y)
+
+
 end.time <- Sys.time()
+
 time.taken <- end.time - start.time
+
 time.taken
 saveRDS(time.taken, "timeTaken.rds")
+
+## Transfer the script to the storage bucket:
+## Copy the line below and run in the terminal
+## change the name of file and path as necessary
+##gsutil -m cp ~/data/8-vic/scripts/modeling_notParallel.R gs://sbs-aws-migration-s2026-8-vic/8-vic/scripts/
