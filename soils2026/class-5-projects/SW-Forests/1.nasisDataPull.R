@@ -1,26 +1,3 @@
-#1.nasisDataPull.R 
-#workflow for gathering pedon data from nasis to create esri shapefiles
-# 05/30/24
-# dave white
-
-
-# nasis data pull for pedons owned by offices
-
-# run query: 'Pedons and Sites by Group +'
-# to load pedons into selected set owned by offices
-# run each of the following nasis groups
-
-#SW-FLA Data Group
-#SW-GLO Data Group
-#SW-GRA Data Group
-#SW-LAS Data Group
-#SW-MAF Data Group
-#SW-RIC Data Group
-#SW-SAN Data Group
-#SW-TUC Data Group
-#________________________________
-
-
 # R script to generate shapefile of pedons owned by offices
 
 # Load Libraries
@@ -91,31 +68,39 @@ library(soilDB)
 library(sf)
 
 # load soils data into soil profile collection
-spc <- fetchNASIS()
+spc <- fetchNASIS(fill=T)
 
 # get the site table from the soil profile collection and name it site
 site.df <- site(spc)
-# inspect the attribute names
-names(site)
 
-
+# removing any observations missing the standard x y cols from NASIS
 site.df <- site.df[complete.cases(site.df$x_std),]
 site.df <- site.df[complete.cases(site.df$y_std),]
+
+# remove any ovservations missing the taxonomic classification
+side.df <- site.df[complete.cases(site.df$taxclname),]
+
+# inspect the attribute names
+names(site.df)
+names(site.df)[c(1,2,103,174,175)]
+head(site.df)[c(1,2,103,174,175)]
+
+site.df <- (site.df)[c(1,2,17,18,103,174,175)]
 
 site.pts <- st_as_sf(site.df, 
                      coords = c('x_std','y_std'),
                      crs = st_crs(4326))
 
-setwd("D:/soils_2026/S2026class5projects/SW2026USFSlands/pedons")
-st_write(site.pts, "pedFS.shp")
+# load buffered project boundary
+bndry <- st_read("D:/soils_2026/class-5-projects/SW2026USFSlands/s2026-class5-sw-forests/data/projectBoundary/bndry-2kbuf.shp")
 
+# project site.pts to match bndry
+site.pts <- st_transform(site.pts, crs = st_crs(bndry))
 
+#clip the points to the bndry
+site.pts.clip <- st_intersection(site.pts, bndry)
 
+plot(site.pts.clip)
 
-
-
-
-
-
-
-
+setwd("D:/soils_2026/class-5-projects/SW2026USFSlands/s2026-class5-sw-forests/data/nasis-export")
+st_write(site.pts.clip, "nasis-exp-127.shp", delete_layer = T)
