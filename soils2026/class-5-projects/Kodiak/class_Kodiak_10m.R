@@ -340,16 +340,25 @@ v <- vrt(tl, vrtfile, filename="~/data/results/class.vrt", overwrite=T, set_name
 #}
 
 #
-pred <- rast("~/data/results/class.vrt")
-plot(pred)
+
 
 setwd("~/data/results")
 # write rasters
-writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("TFW=YES"),datatype='INT1U')
+writeRaster(v, overwrite = TRUE, filename = "class.tif", gdal=c("TFW=YES"),datatype='INT1U')
 # write raster attribute table
 #library(foreign)
-levels(pred)[[1]]
-write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
+
+names(v)
+levels(v)
+
+
+p <- rast("~/data/results/tiles/tile_1.tif")
+names(p)
+levels(p)[1]
+
+
+
+write.dbf(levels(p)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
 stopCluster(cl)
 
 gc()
