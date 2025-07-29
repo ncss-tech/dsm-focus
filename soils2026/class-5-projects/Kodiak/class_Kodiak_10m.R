@@ -275,16 +275,18 @@ rfm$finalModel
 print(rfm)
 rfm$results
 
-
+rfmCaret <- rfm
 # Convert caret wrapper into randomforest model object for raster prediction
 rfm <- rfm$finalModel
 
-
+rfm
 
 varImp(rfm)
 
+plot(rfm)
 
-# get confusion matrix from model
+
+# getrfm# get confusion matrix from model
 cm <- confusionMatrix(rfm$predicted, rfm$y)
 # confusion matrix as a table 
 as.table(cm)
@@ -303,22 +305,43 @@ write.csv((as.matrix(cm, what ="classes")), "~/data/results/ClassAccuracy.csv")
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
 setwd("~/data/tiles")
 tl <- list.files(getwd(), pattern=".tif$", full.names=T)
-
+tlnames <- list.files("~/data/tiles", pattern=".tif$", full.names = F)
+tlnames <- gsub(".tif", "", tlnames)
 
 # read in raster file names as a list
 #rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
 
 
-cl <- parallel::makeCluster(120)
+cl <- parallel::makeCluster(40)
 registerDoParallel(cl)
 
-pred <- foreach(i = 1:length(tl), .packages = c("terra", "randomForest")) %dopar% {
-  pred <- wrap(terra::predict(subset(rast(tl[i]), a),rfm, na.rm=T,steps=4))#wopt=list(steps=40)
-  return(pred)
+foreach(i = 1:length(tl), .packages = c("terra", "randomForest")) %dopar% {
+  wrap(terra::predict(subset(rast(tl[i]), a), rfm, na.rm=T,# type="prob", 
+                      filename = paste0("~/data/results/tiles/",
+                                        tlnames[i],".tif"), 
+                      gdal=c("TFW=YES"),
+                      overwrite=T,
+                      steps=4))
 }
-pred <- do.call(terra::merge,lapply(pred,terra::rast))
-plot(pred)
 
+stopCluster(cl)
+gc()
+
+setwd("~/data/results/tiles/")
+tl <- list.files(getwd(), pattern=".tif$", full.names=T)
+# make a virtual raster dataset from the tiles
+vrtfile <- paste0(tempfile(), ".vrt")
+v <- vrt(tl, vrtfile, filename="~/data/results/class.vrt", overwrite=T, set_names = T)
+
+#pred <- foreach(i = 1:length(tl), .packages = c("terra", "randomForest")) %dopar% {
+#  pred <- wrap(terra::predict(subset(rast(tl[i]), a),rfm, na.rm=T,steps=4))#wopt=list(steps=40)
+#  pred <- do.call(terra::merge,lapply(pred,terra::rast))
+#  return(pred)
+#}
+
+#
+pred <- rast("~/data/results/class.vrt")
+plot(pred)
 
 setwd("~/data/results")
 # write rasters
@@ -334,7 +357,7 @@ gc()
 
 
 
-
+save.image(file = "~/data/results/data72925.RData")
 
 
 
