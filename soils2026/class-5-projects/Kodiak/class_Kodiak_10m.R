@@ -15,22 +15,9 @@ rm(required.packages, new.packages)
 # bring in covariate data and create a stack
 
 # set working directory to dem covs
-setwd("~/data/cov")
+rStack <- rast("~/data/tiles/cov.vrt")
 
-# read in raster file names as a list
-rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
 
-# create a raster stack of dem covs
-rStack <- rast(rList)
-
-rm(rList)
-
-names(rStack)
-
-#assign the names to the stack
-names(rStack) <- gsub(".tif", "", list.files(getwd(), pattern="tif$", full.names = FALSE))
-
-names(rStack)
 
 # Bring in training data points 
 # read in shapefile 
@@ -39,7 +26,19 @@ names(rStack)
 #set working directory to training data.
 setwd("~/data")
 
-pts <- read_sf("trainData082724.shp")
+pts <- read_sf("trainData72925.shp")
+
+names(pts)
+
+pts <- pts[5]
+
+names(pts)
+levels(as.factor(pts$class))
+pts$class <- make.names(pts$class)
+levels(as.factor(pts$class))
+
+#names(pts)[1] <- 'class'
+#names(pts)
 
 # extract raster covariate values at each training point for the all.pts dataset
 pts.sv <- terra::extract(rStack, pts, xy=F, bind=TRUE, na.rm=TRUE) 
@@ -50,9 +49,9 @@ all.pts <- sf::st_as_sf(pts.sv)
 names(all.pts)
 
 # remove unwanted cols
-all.pts <- all.pts[-c(1:6)]
-colnames(all.pts)[1] <- "class"
-names(all.pts)
+#all.pts <- all.pts[-c(1:6)]
+#colnames(all.pts)[1] <- "class"
+#names(all.pts)
 all.pts$class <- as.factor(all.pts$class)
 names(all.pts)
 #
@@ -63,65 +62,105 @@ levels(all.pts$class)
 pts.all <- as.data.frame(all.pts)[-c(208)]
 names(pts.all)
 
+comp <- pts.all
+names(comp)
+# convert sf to a dataframe
+#comp <- (all.pts)
+
+head(comp)
 
 # remove any observations with NAs
-comp <- pts.all[complete.cases(pts.all),]
+comp <- comp[complete.cases(comp),]
+
+
+# remove covariates with NAs
+comp <- comp[,colSums(is.na(comp))==0] # removes columns that contain NA values
+
+names(comp)
+
+nm <- names(comp[-1])
+rStack <- subset(rStack, nm)
+names(rStack)
 
 # convert Class col to a factor
-#comp$Class <- as.factor(comp$Class)
+comp$class <- as.factor(comp$class)
 is.factor(comp$class)
-levels(comp$class)
-summary((comp$class))
-
-### need to start the class with a letter
-comp$class <- as.factor(make.names(comp$class))
-levels(comp$class)
 
 
-
-
-# There are a few classes with < 2 observations remove those classes
+# There are a few classes with < 9 observations remove those classes
 
 length(levels(comp$class))
+
+summary(comp$class)
+
+
+#write.csv((as.data.frame(summary(comp$class))), file = "D:/soils_2026/class-5-projects/SW2026USFSlands/s2026-class5-sw-forests/results/scClassBalance.csv")
+
+nlevels(comp$class)#
+
+comp = droplevels(comp[comp$class %in% names(table(comp$class)) [table(comp$class) >2],])
 
 nlevels(comp$class)
-
-comp = comp[comp$class %in% names(table(comp$class)) [table(comp$class) >2],]
-levels(comp$class)
 summary(comp$class)
-comp <- droplevels(comp)
-levels(comp$class)
-summary(comp$class)
+#write.csv((as.data.frame(summary(comp$class))), file = "D:/soils_2026/class-5-projects/SW2026USFSlands/s2026-class5-sw-forests/results/scModeledClassBalance.csv")
 
-length(levels(comp$class))
+levels(comp$class)
+
 gc()
 #---------------------------------------------------------------------------
+#Boruta to reduce covs
+# run the Boruta algorithm
+#fs_bor <- Boruta(y = comp$class, x = comp[, -1], maxRuns = 15, doTrace = 2)#
+
+# plot variable importance and selected features
+#plot(fs_bor)
+
+# plot evolution of the feature selection
+#plotImpHistory(fs_bor)
+
+# extract the selected feature variables
+#vars <- getSelectedAttributes(fs_bor)
+#vars
+
+# view summary of the results
+#View(attStats(fs_bor))
+
+# subset raster stack
+#rStack <- subset(rStack, vars)
+
+names(rStack)
+
+
 # Recursive Feature Selection (RFE)
 
 
-#subsets <- c(1,10,25,50, 75, 100, 150, 200)
-subsets <- c(1,10,30,50,70,100,150,210)
+subsets <- seq(0, length(names(rStack)), 20)
+#subsets <- seq(35, 45, 1)
+#subsets <- seq(20, 40, 1)
+
+#set number and repeats for cross validation
+number = 10
+repeats = 1
 
 # set seeds to get reproducible results when running the process in parallel
-set.seed(238)
-seeds <- vector(mode = "list", length=112)
-for(i in 1:111) seeds[[i]] <- sample.int(1000, length(subsets) + 1)
-seeds[[112]] <- sample.int(1000, 1)
+set.seed(12)
+seeds <- vector(mode = "list", length=(number*repeats+1))
+for(i in 1:(number*repeats+1)) seeds[[i]] <- sample.int(1000, number*repeats+2)
+seeds[[(number*repeats+1)]] <- sample.int(1000, 1)
 
+
+cl <- makeCluster(120) # base R only recognizes 128 cores and about 5 need to be left for OS
+registerDoParallel(cl)
 
 # set up the rfe control
 ctrl.RFE <- rfeControl(functions = rfFuncs,
-                       #method = "repeatedcv",
-                       #number = 10,
-                       #repeats = 5,
-                       seeds = seeds, 
-                       verbose = FALSE)
+                       method = "repeatedcv",
+                       number = number,
+                       repeats = repeats,
+                       seeds = seeds,
+                       verbose = F)
 
 ## highlight and run everything from c1 to stopCluster(c1) to run RFE
-detectCores()# number of cores
-cores <- 60
-cl <- makeCluster(cores) # base R only recognizes 128 cores and about 5 need to be left for OS
-registerDoParallel(cl)
 set.seed(9)
 rfe <- rfe(x = comp[,-c(1)],
            y = comp$class,
@@ -129,36 +168,35 @@ rfe <- rfe(x = comp[,-c(1)],
            rfeControl = ctrl.RFE,
            allowParallel = TRUE
 )
+
+
+
 stopCluster(cl)             
 gc()
 
+
+
 # Look at the results
 rfe
+
 plot(rfe)
 
-
-
-rfe$fit$confusion
-rfe$results
-plot(rfe) # default plot is for Accuracy, but it can also be changed to Kappa
-plot(rfe, metric="Kappa", main='RFE Kappa')
-plot(rfe, metric="Accuracy", main='RFE Accuracy')
 
 # see list of predictors
 predictors(rfe)
 
 # the rfe function retuns the covariates with the highest accuracy for the rf model
 # view the highest accuracy noted by the *
-rfe
+
 
 # take the accuracy and subtract the accuracySD. look in the results of rf.RFE and find the accuracy that is > or = to this value. this is the number of covariates to use below
 #predictors(rfeLand) # top number of covariates
 
 # look at the top number of covariates that are equal to greater than the accuracy minus the accuracySD
-#predictors(rf.RFE)[c(1:9,24:26)]
+predictors(rfe)#[c(1:60)]
 
 # assign this to a variable
-a <- predictors(rfe)#[c(1:50)]
+a <- predictors(rfe)#[c(1:60)]
 
 
 # subset the covariate stack and the data frame by the selected covariates the variable a is your selected covariates
@@ -167,59 +205,70 @@ a <- predictors(rfe)#[c(1:50)]
 rsm <- subset(rStack, a)
 
 
+
 # subset the data frame points with the number of covariates selected
 names(comp)
 comp.sub <- (comp[,c("class", a)])
-
-
 names(comp.sub)
+
 is.factor(comp.sub$class)
+
 
 #
 # determine number of covariates
 #length(a)
 
-subsets <- 161
-#subsets <- c(1,10, 25, 50, 100, 150, 161)
-# set seeds to get reproducable results when running the process in parallel
+subsets <- seq(length(names(rsm))-5, length(names(rsm))+5, 1)
+
+#set number and repeats for cross validation
+number = 10
+repeats = 5
+
+# set seeds to get reproducible results when running the process in parallel
 set.seed(12)
-seeds <- vector(mode = "list", length=51)
-for(i in 1:50) seeds[[i]] <- sample.int(1000, length(1:subsets) + 1)
-seeds[[51]] <- sample.int(1000, 1)
+seeds <- vector(mode = "list", length=(number*repeats+1))
+for(i in 1:(number*repeats)) seeds[[i]] <- sample.int(number*repeats+1)
+seeds[[(number*repeats+1)]] <- sample.int(1000, 1)
 
 
 # set up the train control
-fitControl <- trainControl(#method = "repeatedcv", 
-                           #number = 10,
-                           #repeats = 5,
-                           p = 0.9, #30% used for test set, 70% used for training set
+fitControl <- trainControl(method = "repeatedcv", 
+                           number = number,
+                           repeats = repeats,
+                           p = 0.8, #30% used for test set, 70% used for training set
                            selectionFunction = 'best', 
                            classProbs = T,
                            savePredictions = T, 
                            returnResamp = 'final',
                            search = "random",
                            seeds = seeds)
-
 # Random Forest - Parallel process
-cl <- makeCluster(cores)
+cl <- makeCluster(120)
 registerDoParallel(cl)
 set.seed(48)
 rfm = train(x = comp.sub[,-c(1)],
             y = comp.sub$class,
-             "rf", 
-             trControl = fitControl, 
-             ntree = 500, #number of trees default is 500, which seems to work best anyway. 
-             tuneLength=10, 
-             metric = 'Kappa', 
-             na.action=na.pass,
-             keep.forest=TRUE, # added this line and the next for partial dependence plots
-             importance=TRUE)
+            "rf", 
+            trControl = fitControl, 
+            ntree = 500, #number of trees default is 500, which seems to work best anyway. 
+            tuneLength=10, 
+            #metric = 'Kappa', 
+            na.action=na.pass,
+            keep.forest=TRUE, # added this line and the next for partial dependence plots
+            nodesize =  8,
+            importance=TRUE)
+
+
+
+
+
 stopCluster(cl)
 gc()
 
 
 # Inspect rfFit
 rfm$finalModel
+
 
 
 #look at overall accuracy, kappa, and SD associated with each mtry value
@@ -232,52 +281,72 @@ rfm <- rfm$finalModel
 
 
 
+varImp(rfm)
 
-confusionMatrix(as.factor(rfm$predicted), as.factor(rfm$y))
-options(max.print=1000000)
-rfm
 
-#set working directory to save objects
-setwd("~/data")
-
-saveRDS(pts.sv, "pts.sv.rds")
-saveRDS(rfe, "rfe.rds")
-saveRDS(rfm, "rfm.rds")
-
+# get confusion matrix from model
+cm <- confusionMatrix(rfm$predicted, rfm$y)
+# confusion matrix as a table 
+as.table(cm)
+write.csv((as.table(cm)), "~/data/results/ConMat.csv")
+# get overall accuracy metrics
+as.matrix(cm, what="overall")
+write.csv((as.matrix(cm, what="overall")), "~/data/results/Overall.csv")
+# get class wise accuracy metrics
+as.matrix(cm, what ="classes")
+write.csv((as.matrix(cm, what ="classes")), "~/data/results/ClassAccuracy.csv")
 
 
 # make predictions
 
 # set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
-setwd("~/data/tiles/")
+# set wd to store tiles for prediction - tiles are written to hard drive, make sure there is enough room
+setwd("~/data/tiles")
+tl <- list.files(getwd(), pattern=".tif$", full.names=T)
 
 
-#numTiles <- 11 # numTiles^2 should <= the number of cores - in this case I have 123 cores available and 11x11 would give 121 tiles
-#numTiles <- round((detectCores()), digits = 0)
-numTiles <- 16
+# read in raster file names as a list
+#rList=list.files(getwd(), pattern="tif$", full.names = FALSE)
 
-x <- rast(ncol=numTiles, nrow=numTiles, extent=ext(rsm))
 
-tl <- makeTiles(rsm, x, overwrite=T, extend=T)
-
-cl <- parallel::makeCluster(64)
+cl <- parallel::makeCluster(120)
 registerDoParallel(cl)
 
-pred <- foreach(i = 1:length(tl),
-                     .packages = c("terra", "randomForest")) %dopar% {
-                       pred <- wrap(terra::predict(rast(tl[i]),rfm, na.rm=T))
-                       return(pred)
-                     }
+pred <- foreach(i = 1:length(tl), .packages = c("terra", "randomForest")) %dopar% {
+  pred <- wrap(terra::predict(subset(rast(tl[i]), a),rfm, na.rm=T,steps=4))#wopt=list(steps=40)
+  return(pred)
+}
 pred <- do.call(terra::merge,lapply(pred,terra::rast))
 plot(pred)
+
+
 setwd("~/data/results")
 # write rasters
-writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("COMPRESS=DEFLATE", "TFW=YES"),datatype='INT1U')
+writeRaster(pred, overwrite = TRUE, filename = "class.tif", gdal=c("TFW=YES"),datatype='INT1U')
 # write raster attribute table
 #library(foreign)
+levels(pred)[[1]]
 write.dbf(levels(pred)[[1]], file='class.tif.vat.dbf') # make sure the first part of the file name is exactly the same as the predicted raster
+stopCluster(cl)
+
+gc()
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#################################################################################################
 
 # process probability stacks in smaller chunks
 setwd("~/data/8-vic/results/prob")
